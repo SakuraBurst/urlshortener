@@ -9,7 +9,7 @@ import (
 	"net/url"
 )
 
-func InitApi() {
+func InitAPI() {
 	http.HandleFunc("/", func(writer http.ResponseWriter, request *http.Request) {
 		switch request.Method {
 		case http.MethodGet:
