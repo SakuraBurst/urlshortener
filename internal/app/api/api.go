@@ -2,7 +2,6 @@ package api
 
 import (
 	"bytes"
-	"encoding/json"
 	"github.com/SakuraBurst/urlshortener/internal/controlers"
 	"io"
 	"log"
@@ -44,13 +43,12 @@ func CreateShortenerURL(writer http.ResponseWriter, request *http.Request) {
 		errorHandler(writer, http.StatusInternalServerError, err)
 		return
 	}
-	body := map[string]string{}
-	err = json.Unmarshal(buf.Bytes(), &body)
+	_, err = io.Copy(buf, request.Body)
 	if err != nil {
 		errorHandler(writer, http.StatusInternalServerError, err)
 		return
 	}
-	unShortenURL, err := url.Parse(body["URL"])
+	unShortenURL, err := url.Parse(buf.String())
 	if err != nil {
 		errorHandler(writer, http.StatusInternalServerError, err)
 		return
