@@ -18,7 +18,7 @@ type URLTransfer struct {
 }
 
 type ResultTransfer struct {
-	Id  string
+	ID  string
 	Err error
 }
 
@@ -71,7 +71,7 @@ func GetFromBd(ctx context.Context, id string) *URLTransfer {
 
 func getFromBd(urlChan chan<- *URLTransfer, clh closedHelper, id string) {
 	var err error = nil
-	unShorterUrl, ok := bd[id]
+	unShorterURL, ok := bd[id]
 	if !ok {
 		err = errors.New("there is no such url")
 	}
@@ -79,7 +79,7 @@ func getFromBd(urlChan chan<- *URLTransfer, clh closedHelper, id string) {
 		return
 	}
 	urlChan <- &URLTransfer{
-		UnShorterURL: unShorterUrl,
+		UnShorterURL: unShorterURL,
 		Err:          err,
 	}
 }
@@ -98,5 +98,5 @@ func writeToBd(resultChan chan<- *ResultTransfer, clh closedHelper, unShortenURL
 	if clh.isClosed() {
 		return
 	}
-	resultChan <- &ResultTransfer{Id: result}
+	resultChan <- &ResultTransfer{ID: result}
 }

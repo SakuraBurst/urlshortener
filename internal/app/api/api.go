@@ -27,7 +27,7 @@ func InitAPI() {
 
 func RedirectURL(writer http.ResponseWriter, request *http.Request) {
 	id := request.URL.Query().Get("id")
-	unShortenURL, err := controlers.GetUrlFromId(id)
+	unShortenURL, err := controlers.GetURLFromID(id)
 	if err != nil {
 		errorHandler(writer, http.StatusNotFound, err)
 		return
@@ -53,7 +53,7 @@ func CreateShortenerURL(writer http.ResponseWriter, request *http.Request) {
 		errorHandler(writer, http.StatusInternalServerError, err)
 		return
 	}
-	id, err := controlers.WriteUrl(unShortenURL)
+	id, err := controlers.WriteURL(unShortenURL)
 	if err != nil {
 		errorHandler(writer, http.StatusInternalServerError, err)
 		return
