@@ -12,7 +12,7 @@ import (
 
 type MapBd map[string]*url.URL
 
-var NoSuchURLError = errors.New("there is no such url")
+var ErrorNoSuchURL = errors.New("there is no such url")
 
 func (m MapBd) Read(ctx context.Context, id string) *URLTransfer {
 	urlChan := make(chan *URLTransfer)
@@ -82,7 +82,7 @@ func getFromBd(urlChan chan<- *URLTransfer, clh closedHelper, id string) {
 	var err error = nil
 	unShorterURL, ok := bd[id]
 	if !ok {
-		err = NoSuchURLError
+		err = ErrorNoSuchURL
 	}
 	if clh.isClosed() {
 		return

@@ -28,7 +28,7 @@ func (r repo) Read(ctx context.Context, s string) *repository.URLTransfer {
 	if _, ok := r[s]; !ok {
 		return &repository.URLTransfer{
 			UnShorterURL: nil,
-			Err:          repository.NoSuchURLError,
+			Err:          repository.ErrorNoSuchURL,
 		}
 	}
 	return &repository.URLTransfer{
