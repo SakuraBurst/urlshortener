@@ -2,21 +2,27 @@ package controlers
 
 import (
 	"context"
-	"github.com/SakuraBurst/urlshortener/internal/repositroy"
+	"github.com/SakuraBurst/urlshortener/internal/repository"
 	"net/url"
 	"time"
 )
 
+var rep repository.URLShortenerRepository = repository.MapBd{}
+
+func SetRepository(repo repository.URLShortenerRepository) {
+	rep = repo
+}
+
 func GetURLFromID(id string) (*url.URL, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*2)
 	defer cancel()
-	urlTransfer := repositroy.GetFromBd(ctx, id)
+	urlTransfer := rep.Read(ctx, id)
 	return urlTransfer.UnShorterURL, urlTransfer.Err
 }
 
 func WriteURL(unShortenURL *url.URL) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*2)
 	defer cancel()
-	resultTransfer := repositroy.WriteToBd(ctx, unShortenURL)
+	resultTransfer := rep.Write(ctx, unShortenURL)
 	return resultTransfer.ID, resultTransfer.Err
 }

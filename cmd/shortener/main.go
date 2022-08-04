@@ -1,7 +1,12 @@
 package main
 
-import "github.com/SakuraBurst/urlshortener/internal/app/api"
+import (
+	"fmt"
+	"net/url"
+)
 
 func main() {
-	api.InitAPI()
+	a, _ := url.Parse("https://www.google.com/")
+	fmt.Printf("%+v\n", *a)
+	//api.InitAPI()
 }

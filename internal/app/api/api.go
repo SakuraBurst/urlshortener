@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"errors"
 	"github.com/SakuraBurst/urlshortener/internal/controlers"
 	"io"
 	"log"
@@ -26,6 +27,10 @@ func InitAPI() {
 }
 
 func RedirectURL(writer http.ResponseWriter, request *http.Request) {
+	if !request.URL.Query().Has("id") {
+		errorHandler(writer, http.StatusBadRequest, errors.New("there is no id in query"))
+		return
+	}
 	id := request.URL.Query().Get("id")
 	unShortenURL, err := controlers.GetURLFromID(id)
 	if err != nil {
@@ -43,9 +48,9 @@ func CreateShortenerURL(writer http.ResponseWriter, request *http.Request) {
 		errorHandler(writer, http.StatusInternalServerError, err)
 		return
 	}
-	_, err = io.Copy(buf, request.Body)
-	if err != nil {
-		errorHandler(writer, http.StatusInternalServerError, err)
+	defer request.Body.Close()
+	if buf.Len() == 0 {
+		errorHandler(writer, http.StatusBadRequest, err)
 		return
 	}
 	unShortenURL, err := url.Parse(buf.String())
@@ -58,6 +63,7 @@ func CreateShortenerURL(writer http.ResponseWriter, request *http.Request) {
 		errorHandler(writer, http.StatusInternalServerError, err)
 		return
 	}
+	writer.Header().Set("content-type", "text/plain")
 	writer.WriteHeader(http.StatusCreated)
 	_, err = writer.Write([]byte(id))
 	if err != nil {
