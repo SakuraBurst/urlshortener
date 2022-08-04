@@ -10,6 +10,11 @@ import (
 	"net/url"
 )
 
+var host = url.URL{
+	Scheme: "http",
+	Host:   "localhost:8080",
+}
+
 func InitAPI() {
 	http.HandleFunc("/", func(writer http.ResponseWriter, request *http.Request) {
 		switch request.Method {
@@ -64,9 +69,13 @@ func CreateShortenerURL(writer http.ResponseWriter, request *http.Request) {
 		errorHandler(writer, http.StatusInternalServerError, err)
 		return
 	}
+	host.Path = "/" + id
+	defer func() {
+		host.Path = ""
+	}()
 	writer.Header().Set("content-type", "text/plain")
 	writer.WriteHeader(http.StatusCreated)
-	_, err = writer.Write([]byte(id))
+	_, err = writer.Write([]byte(host.String()))
 	if err != nil {
 		log.Println(err)
 	}
