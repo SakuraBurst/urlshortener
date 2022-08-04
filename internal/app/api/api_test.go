@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"context"
+	"errors"
 	"github.com/SakuraBurst/urlshortener/internal/controlers"
 	"github.com/SakuraBurst/urlshortener/internal/repository"
 	"github.com/stretchr/testify/assert"
@@ -126,19 +127,6 @@ func TestCreateShortenerURL(t *testing.T) {
 	}
 }
 
-func TestInitAPI(t *testing.T) {
-	tests := []struct {
-		name string
-	}{
-		// TODO: Add test cases.
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			InitAPI()
-		})
-	}
-}
-
 func TestRedirectURL(t *testing.T) {
 	type want struct {
 		statusCode int
@@ -213,7 +201,7 @@ func TestRedirectURL(t *testing.T) {
 
 func Test_errorHandler(t *testing.T) {
 	type args struct {
-		writer     http.ResponseWriter
+		writer     *httptest.ResponseRecorder
 		statusCode int
 		err        error
 	}
@@ -221,11 +209,20 @@ func Test_errorHandler(t *testing.T) {
 		name string
 		args args
 	}{
-		// TODO: Add test cases.
+		{
+			name: "work test",
+			args: args{
+				writer:     httptest.NewRecorder(),
+				statusCode: http.StatusBadRequest,
+				err:        errors.New("test"),
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			errorHandler(tt.args.writer, tt.args.statusCode, tt.args.err)
+			res := tt.args.writer.Result()
+			assert.Equal(t, res.StatusCode, tt.args.statusCode)
 		})
 	}
 }
