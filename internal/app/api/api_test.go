@@ -147,7 +147,7 @@ func TestRedirectURL(t *testing.T) {
 			name: "positive test",
 			args: args{
 				writer:  httptest.NewRecorder(),
-				request: createRequest(t, http.MethodGet, "/?id=1", nil),
+				request: createRequest(t, http.MethodGet, "/1", nil),
 				bd: repo{"1": &url.URL{
 					Scheme: "https",
 					Host:   "www.google.com",
@@ -164,7 +164,7 @@ func TestRedirectURL(t *testing.T) {
 			name: "no such url test",
 			args: args{
 				writer:  httptest.NewRecorder(),
-				request: createRequest(t, http.MethodGet, "/?id=1", bytes.NewBuffer([]byte{0})),
+				request: createRequest(t, http.MethodGet, "/1", bytes.NewBuffer([]byte{0})),
 				bd:      repo{},
 			},
 			want: want{
@@ -222,6 +222,7 @@ func Test_errorHandler(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			errorHandler(tt.args.writer, tt.args.statusCode, tt.args.err)
 			res := tt.args.writer.Result()
+			res.Body.Close()
 			assert.Equal(t, res.StatusCode, tt.args.statusCode)
 		})
 	}

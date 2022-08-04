@@ -27,11 +27,12 @@ func InitAPI() {
 }
 
 func RedirectURL(writer http.ResponseWriter, request *http.Request) {
-	if !request.URL.Query().Has("id") {
+	id := request.URL.Path[1:]
+	if len(id) == 0 {
 		errorHandler(writer, http.StatusBadRequest, errors.New("there is no id in query"))
 		return
 	}
-	id := request.URL.Query().Get("id")
+
 	unShortenURL, err := controlers.GetURLFromID(id)
 	if err != nil {
 		errorHandler(writer, http.StatusNotFound, err)
