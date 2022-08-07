@@ -58,9 +58,6 @@ func CreateShortenerURL(c *gin.Context) {
 		host.Path = ""
 	}()
 	c.String(http.StatusCreated, host.String())
-	if err != nil {
-		log.Println(err)
-	}
 }
 
 func errorHandler(c *gin.Context) {
