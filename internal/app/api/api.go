@@ -1,10 +1,9 @@
 package api
 
 import (
-	"bytes"
 	"errors"
 	"github.com/SakuraBurst/urlshortener/internal/controlers"
-	"io"
+	"github.com/gin-gonic/gin"
 	"log"
 	"net/http"
 	"net/url"
@@ -15,73 +14,58 @@ var host = url.URL{
 	Host:   "localhost:8080",
 }
 
-func InitAPI() {
-	http.HandleFunc("/", func(writer http.ResponseWriter, request *http.Request) {
-		switch request.Method {
-		case http.MethodGet:
-			RedirectURL(writer, request)
-
-		case http.MethodPost:
-			CreateShortenerURL(writer, request)
-
-		default:
-			writer.WriteHeader(http.StatusBadRequest)
-		}
-	})
-	log.Fatal(http.ListenAndServe(":8080", nil))
+func InitAPI() *gin.Engine {
+	r := gin.Default()
+	r.Use(errorHandler)
+	r.GET("/:hash", RedirectURL)
+	r.POST("/", CreateShortenerURL)
+	return r
 }
 
-func RedirectURL(writer http.ResponseWriter, request *http.Request) {
-	id := request.URL.Path[1:]
-	if len(id) == 0 {
-		errorHandler(writer, http.StatusBadRequest, errors.New("there is no id in query"))
-		return
-	}
+func RedirectURL(c *gin.Context) {
+	id := c.Param("hash")
 
 	unShortenURL, err := controlers.GetURLFromID(id)
 	if err != nil {
-		errorHandler(writer, http.StatusNotFound, err)
+		c.AbortWithError(http.StatusNotFound, err)
 		return
 	}
-	writer.Header().Set("location", unShortenURL.String())
-	writer.WriteHeader(http.StatusTemporaryRedirect)
+	c.Redirect(http.StatusTemporaryRedirect, unShortenURL.String())
 }
 
-func CreateShortenerURL(writer http.ResponseWriter, request *http.Request) {
-	buf := bytes.NewBuffer(nil)
-	_, err := io.Copy(buf, request.Body)
+func CreateShortenerURL(c *gin.Context) {
+	body, err := c.GetRawData()
 	if err != nil {
-		errorHandler(writer, http.StatusInternalServerError, err)
+		c.AbortWithError(http.StatusInternalServerError, err)
 		return
 	}
-	defer request.Body.Close()
-	if buf.Len() == 0 {
-		errorHandler(writer, http.StatusBadRequest, err)
+	if len(body) == 0 {
+		c.AbortWithError(http.StatusBadRequest, errors.New("request body is empty"))
 		return
 	}
-	unShortenURL, err := url.Parse(buf.String())
+	unShortenURL, err := url.Parse(string(body))
 	if err != nil {
-		errorHandler(writer, http.StatusInternalServerError, err)
+		c.AbortWithError(http.StatusInternalServerError, err)
 		return
 	}
 	id, err := controlers.WriteURL(unShortenURL)
 	if err != nil {
-		errorHandler(writer, http.StatusInternalServerError, err)
+		c.AbortWithError(http.StatusInternalServerError, err)
 		return
 	}
 	host.Path = "/" + id
 	defer func() {
 		host.Path = ""
 	}()
-	writer.Header().Set("content-type", "text/plain")
-	writer.WriteHeader(http.StatusCreated)
-	_, err = writer.Write([]byte(host.String()))
+	c.String(http.StatusCreated, host.String())
 	if err != nil {
 		log.Println(err)
 	}
 }
 
-func errorHandler(writer http.ResponseWriter, statusCode int, err error) {
-	log.Println(err)
-	writer.WriteHeader(statusCode)
+func errorHandler(c *gin.Context) {
+	c.Next()
+	for _, e := range c.Errors {
+		log.Println(e)
+	}
 }

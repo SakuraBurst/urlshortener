@@ -2,8 +2,10 @@ package main
 
 import (
 	"github.com/SakuraBurst/urlshortener/internal/app/api"
+	"log"
 )
 
 func main() {
-	api.InitAPI()
+	router := api.InitAPI()
+	log.Fatal(router.Run(":8080"))
 }

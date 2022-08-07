@@ -3,7 +3,6 @@ package api
 import (
 	"bytes"
 	"context"
-	"errors"
 	"github.com/SakuraBurst/urlshortener/internal/controlers"
 	"github.com/SakuraBurst/urlshortener/internal/repository"
 	"github.com/stretchr/testify/assert"
@@ -75,7 +74,7 @@ func TestCreateShortenerURL(t *testing.T) {
 			},
 			want: want{
 				statusCode:  http.StatusCreated,
-				contentType: "text/plain",
+				contentType: "text/plain; charset=utf-8",
 			},
 			positiveTest: true,
 		},
@@ -106,10 +105,11 @@ func TestCreateShortenerURL(t *testing.T) {
 			positiveTest: false,
 		},
 	}
+	router := InitAPI()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			controlers.SetRepository(tt.args.bd)
-			CreateShortenerURL(tt.args.writer, tt.args.request)
+			router.ServeHTTP(tt.args.writer, tt.args.request)
 			result := tt.args.writer.Result()
 			assert.Equal(t, tt.want.contentType, result.Header.Get("content-type"))
 			assert.Equal(t, tt.want.statusCode, result.StatusCode)
@@ -180,50 +180,22 @@ func TestRedirectURL(t *testing.T) {
 				bd:      repo{},
 			},
 			want: want{
-				statusCode: http.StatusBadRequest,
+				statusCode: http.StatusNotFound,
 			},
 			positiveTest: false,
 		},
 	}
+	router := InitAPI()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			controlers.SetRepository(tt.args.bd)
-			RedirectURL(tt.args.writer, tt.args.request)
+			router.ServeHTTP(tt.args.writer, tt.args.request)
 			result := tt.args.writer.Result()
 			result.Body.Close()
 			assert.Equal(t, tt.want.statusCode, result.StatusCode)
 			if tt.positiveTest {
 				assert.Equal(t, tt.want.location, result.Header.Get("Location"))
 			}
-		})
-	}
-}
-
-func Test_errorHandler(t *testing.T) {
-	type args struct {
-		writer     *httptest.ResponseRecorder
-		statusCode int
-		err        error
-	}
-	tests := []struct {
-		name string
-		args args
-	}{
-		{
-			name: "work test",
-			args: args{
-				writer:     httptest.NewRecorder(),
-				statusCode: http.StatusBadRequest,
-				err:        errors.New("test"),
-			},
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			errorHandler(tt.args.writer, tt.args.statusCode, tt.args.err)
-			res := tt.args.writer.Result()
-			res.Body.Close()
-			assert.Equal(t, res.StatusCode, tt.args.statusCode)
 		})
 	}
 }
