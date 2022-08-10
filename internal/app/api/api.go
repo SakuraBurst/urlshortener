@@ -9,11 +9,6 @@ import (
 	"net/url"
 )
 
-var host = url.URL{
-	Scheme: "http",
-	Host:   "localhost:8080",
-}
-
 func InitAPI() *gin.Engine {
 	r := gin.Default()
 	r.Use(errorHandler)
@@ -25,7 +20,7 @@ func InitAPI() *gin.Engine {
 func RedirectURL(c *gin.Context) {
 	id := c.Param("hash")
 
-	unShortenURL, err := controlers.GetURLFromID(id)
+	unShortenURL, err := controlers.GetURLFromID(c, id)
 	if err != nil {
 		c.AbortWithError(http.StatusNotFound, err)
 		return
@@ -48,10 +43,14 @@ func CreateShortenerURL(c *gin.Context) {
 		c.AbortWithError(http.StatusInternalServerError, err)
 		return
 	}
-	id, err := controlers.WriteURL(unShortenURL)
+	id, err := controlers.WriteURL(c, unShortenURL)
 	if err != nil {
 		c.AbortWithError(http.StatusInternalServerError, err)
 		return
+	}
+	var host = url.URL{
+		Scheme: "http",
+		Host:   "localhost:8080",
 	}
 	host.Path = "/" + id
 	defer func() {

@@ -14,40 +14,6 @@ type MapBd map[string]*url.URL
 
 var ErrorNoSuchURL = errors.New("there is no such url")
 
-func (m MapBd) Read(ctx context.Context, id string) *URLTransfer {
-	urlChan := make(chan *URLTransfer)
-	clh := closedHelper{closed: make(chan bool)}
-	go getFromBd(urlChan, clh, id)
-	select {
-	case urlTransfer := <-urlChan:
-		return urlTransfer
-	case <-ctx.Done():
-		log.Println("context canceled with", ctx.Err())
-		close(clh.closed)
-		close(urlChan)
-		return &URLTransfer{
-			UnShorterURL: nil,
-			Err:          ctx.Err(),
-		}
-	}
-}
-
-func (m MapBd) Write(ctx context.Context, u *url.URL) *ResultTransfer {
-	resultChan := make(chan *ResultTransfer)
-	clh := closedHelper{closed: make(chan bool)}
-	go writeToBd(resultChan, clh, u)
-	select {
-	case res := <-resultChan:
-		return res
-	case <-ctx.Done():
-		log.Println("context canceled with", ctx.Err())
-		close(clh.closed)
-		close(resultChan)
-		return &ResultTransfer{Err: ctx.Err()}
-	}
-
-}
-
 var bd = MapBd{}
 
 type URLShortenerRepository interface {
@@ -65,26 +31,43 @@ type ResultTransfer struct {
 	Err error
 }
 
-type closedHelper struct {
-	closed chan bool
-}
-
-func (ch *closedHelper) isClosed() bool {
+func (m MapBd) Read(ctx context.Context, id string) *URLTransfer {
+	urlChan := make(chan *URLTransfer)
+	go getFromBd(ctx, urlChan, id)
 	select {
-	case <-ch.closed:
-		return true
-	default:
-		return false
+	case urlTransfer := <-urlChan:
+		return urlTransfer
+	case <-ctx.Done():
+		log.Println("context canceled with ", ctx.Err())
+		close(urlChan)
+		return &URLTransfer{
+			UnShorterURL: nil,
+			Err:          ctx.Err(),
+		}
 	}
 }
 
-func getFromBd(urlChan chan<- *URLTransfer, clh closedHelper, id string) {
+func (m MapBd) Write(ctx context.Context, u *url.URL) *ResultTransfer {
+	resultChan := make(chan *ResultTransfer)
+	go writeToBd(ctx, resultChan, u)
+	select {
+	case res := <-resultChan:
+		return res
+	case <-ctx.Done():
+		log.Println("context canceled with ", ctx.Err())
+		close(resultChan)
+		return &ResultTransfer{Err: ctx.Err()}
+	}
+
+}
+
+func getFromBd(ctx context.Context, urlChan chan<- *URLTransfer, id string) {
 	var err error = nil
 	unShorterURL, ok := bd[id]
 	if !ok {
 		err = ErrorNoSuchURL
 	}
-	if clh.isClosed() {
+	if ctx.Err() != nil {
 		return
 	}
 	urlChan <- &URLTransfer{
@@ -93,18 +76,18 @@ func getFromBd(urlChan chan<- *URLTransfer, clh closedHelper, id string) {
 	}
 }
 
-func writeToBd(resultChan chan<- *ResultTransfer, clh closedHelper, unShortenURL *url.URL) {
+func writeToBd(ctx context.Context, resultChan chan<- *ResultTransfer, unShortenURL *url.URL) {
 	h := sha1.New()
 	_, err := io.WriteString(h, unShortenURL.String())
 	if err != nil {
-		if !clh.isClosed() {
+		if ctx.Err() == nil {
 			resultChan <- &ResultTransfer{Err: err}
 		}
 		return
 	}
 	result := fmt.Sprintf("%x", h.Sum(nil))[:5]
 	bd[result] = unShortenURL
-	if clh.isClosed() {
+	if ctx.Err() != nil {
 		return
 	}
 	resultChan <- &ResultTransfer{ID: result}
