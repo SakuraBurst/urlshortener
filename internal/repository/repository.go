@@ -8,17 +8,18 @@ import (
 	"io"
 	"log"
 	"net/url"
+	"sync"
 )
 
-type MapBd map[string]*url.URL
+type MapBd struct {
+	sync.Map
+}
 
 var ErrorNoSuchURL = errors.New("there is no such url")
 
-var bd = MapBd{}
-
 type URLShortenerRepository interface {
-	Read(context.Context, string) *URLTransfer
-	Write(context.Context, *url.URL) *ResultTransfer
+	ReadFromBd(context.Context, string) *URLTransfer
+	WriteToBd(context.Context, *url.URL) *ResultTransfer
 }
 
 type URLTransfer struct {
@@ -31,9 +32,9 @@ type ResultTransfer struct {
 	Err error
 }
 
-func (m MapBd) Read(ctx context.Context, id string) *URLTransfer {
+func (m *MapBd) ReadFromBd(ctx context.Context, id string) *URLTransfer {
 	urlChan := make(chan *URLTransfer)
-	go getFromBd(ctx, urlChan, id)
+	go m.getFromBd(ctx, urlChan, id)
 	select {
 	case urlTransfer := <-urlChan:
 		return urlTransfer
@@ -47,9 +48,9 @@ func (m MapBd) Read(ctx context.Context, id string) *URLTransfer {
 	}
 }
 
-func (m MapBd) Write(ctx context.Context, u *url.URL) *ResultTransfer {
+func (m *MapBd) WriteToBd(ctx context.Context, u *url.URL) *ResultTransfer {
 	resultChan := make(chan *ResultTransfer)
-	go writeToBd(ctx, resultChan, u)
+	go m.writeToBd(ctx, resultChan, u)
 	select {
 	case res := <-resultChan:
 		return res
@@ -61,11 +62,27 @@ func (m MapBd) Write(ctx context.Context, u *url.URL) *ResultTransfer {
 
 }
 
-func getFromBd(ctx context.Context, urlChan chan<- *URLTransfer, id string) {
+func (m *MapBd) getFromBd(ctx context.Context, urlChan chan<- *URLTransfer, id string) {
 	var err error = nil
-	unShorterURL, ok := bd[id]
+	untypedURL, ok := m.Load(id)
 	if !ok {
 		err = ErrorNoSuchURL
+	}
+	if ctx.Err() != nil {
+		return
+	}
+	var unShorterURL *url.URL
+	switch v := untypedURL.(type) {
+	case *url.URL:
+		untypedURL = v
+	default:
+		if ctx.Err() != nil {
+			return
+		}
+		urlChan <- &URLTransfer{
+			UnShorterURL: nil,
+			Err:          errors.New("unexpected error"),
+		}
 	}
 	if ctx.Err() != nil {
 		return
@@ -76,7 +93,7 @@ func getFromBd(ctx context.Context, urlChan chan<- *URLTransfer, id string) {
 	}
 }
 
-func writeToBd(ctx context.Context, resultChan chan<- *ResultTransfer, unShortenURL *url.URL) {
+func (m *MapBd) writeToBd(ctx context.Context, resultChan chan<- *ResultTransfer, unShortenURL *url.URL) {
 	h := sha1.New()
 	_, err := io.WriteString(h, unShortenURL.String())
 	if err != nil {
@@ -86,7 +103,7 @@ func writeToBd(ctx context.Context, resultChan chan<- *ResultTransfer, unShorten
 		return
 	}
 	result := fmt.Sprintf("%x", h.Sum(nil))[:5]
-	bd[result] = unShortenURL
+	m.Store(result, unShortenURL)
 	if ctx.Err() != nil {
 		return
 	}

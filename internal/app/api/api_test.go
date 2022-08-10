@@ -23,7 +23,7 @@ func createRequest(t *testing.T, method string, url string, body io.Reader) *htt
 
 type repo map[string]*url.URL
 
-func (r repo) Read(ctx context.Context, s string) *repository.URLTransfer {
+func (r repo) ReadFromBd(ctx context.Context, s string) *repository.URLTransfer {
 	if _, ok := r[s]; !ok {
 		return &repository.URLTransfer{
 			UnShorterURL: nil,
@@ -36,7 +36,7 @@ func (r repo) Read(ctx context.Context, s string) *repository.URLTransfer {
 	}
 }
 
-func (r repo) Write(ctx context.Context, url *url.URL) *repository.ResultTransfer {
+func (r repo) WriteToBd(ctx context.Context, url *url.URL) *repository.ResultTransfer {
 	builder := strings.Builder{}
 	builder.WriteString("a")
 	for _, ok := r[builder.String()]; ok; {
