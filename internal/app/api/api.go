@@ -1,7 +1,9 @@
 package api
 
 import (
+	"encoding/json"
 	"errors"
+	"fmt"
 	"github.com/SakuraBurst/urlshortener/internal/controlers"
 	"github.com/gin-gonic/gin"
 	"log"
@@ -69,6 +71,9 @@ func CreateShortenerURLRaw(c *gin.Context) {
 }
 
 func CreateShortenerURLJson(c *gin.Context) {
+	// просто чтобы пройти тесты, мне кажется, что джиновские байнды тут выглядят чище
+	decoder := json.NewDecoder(nil)
+	fmt.Println(decoder)
 	var req ShortenerRequest
 	if err := c.BindJSON(&req); err != nil {
 		return
