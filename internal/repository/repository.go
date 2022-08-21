@@ -93,7 +93,6 @@ func (m *MapBd) getFromBd(ctx context.Context, urlChan chan<- *URLTransfer, id s
 			Err:          err,
 		}
 	}
-	return
 }
 
 func (m *MapBd) writeToBd(ctx context.Context, resultChan chan<- *ResultTransfer, unShortenURL *url.URL) {
@@ -110,5 +109,4 @@ func (m *MapBd) writeToBd(ctx context.Context, resultChan chan<- *ResultTransfer
 	if ctx.Err() == nil {
 		resultChan <- &ResultTransfer{ID: result}
 	}
-	return
 }
