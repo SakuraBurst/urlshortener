@@ -49,7 +49,7 @@ func (r repo) WriteToBd(ctx context.Context, url *url.URL) *repository.ResultTra
 	}
 }
 
-func TestCreateShortenerURL(t *testing.T) {
+func TestCreateShortenerURLRaw(t *testing.T) {
 	type want struct {
 		statusCode  int
 		contentType string
@@ -86,7 +86,7 @@ func TestCreateShortenerURL(t *testing.T) {
 				bd:      repo{},
 			},
 			want: want{
-				statusCode:  http.StatusInternalServerError,
+				statusCode:  http.StatusBadRequest,
 				contentType: "",
 			},
 			positiveTest: false,
@@ -96,6 +96,84 @@ func TestCreateShortenerURL(t *testing.T) {
 			args: args{
 				writer:  httptest.NewRecorder(),
 				request: createRequest(t, http.MethodPost, "/", bytes.NewBuffer(nil)),
+				bd:      repo{},
+			},
+			want: want{
+				statusCode:  http.StatusBadRequest,
+				contentType: "",
+			},
+			positiveTest: false,
+		},
+	}
+	router := InitAPI()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			controlers.SetRepository(tt.args.bd)
+			router.ServeHTTP(tt.args.writer, tt.args.request)
+			result := tt.args.writer.Result()
+			assert.Equal(t, tt.want.contentType, result.Header.Get("content-type"))
+			assert.Equal(t, tt.want.statusCode, result.StatusCode)
+			buf := bytes.NewBuffer(nil)
+			defer result.Body.Close()
+			_, err := io.Copy(buf, result.Body)
+			require.NoError(t, err)
+			if tt.positiveTest {
+				assert.NotEmpty(t, buf.Bytes())
+				assert.NotEmpty(t, tt.args.bd)
+			} else {
+				assert.Empty(t, tt.args.bd)
+			}
+		})
+	}
+}
+
+func TestCreateShortenerURLJson(t *testing.T) {
+	type want struct {
+		statusCode  int
+		contentType string
+	}
+	type args struct {
+		writer  *httptest.ResponseRecorder
+		request *http.Request
+		bd      repository.URLShortenerRepository
+	}
+	tests := []struct {
+		name         string
+		args         args
+		want         want
+		positiveTest bool
+	}{
+		{
+			name: "positive test",
+			args: args{
+				writer:  httptest.NewRecorder(),
+				request: createRequest(t, http.MethodPost, "/api/shorten", bytes.NewBuffer([]byte(`{"url": "https://vk.com/feed"}`))),
+				bd:      repo{},
+			},
+			want: want{
+				statusCode:  http.StatusCreated,
+				contentType: "application/json; charset=utf-8",
+			},
+			positiveTest: true,
+		},
+		{
+			name: "bad url test",
+			args: args{
+				writer:  httptest.NewRecorder(),
+				request: createRequest(t, http.MethodPost, "/api/shorten", bytes.NewBuffer([]byte(`{"url": "\n"}`))),
+				bd:      repo{},
+			},
+			want: want{
+				statusCode:  http.StatusBadRequest,
+				contentType: "",
+			},
+			positiveTest: false,
+		},
+		{
+			name: "nil body",
+			args: args{
+				writer:  httptest.NewRecorder(),
+				request: createRequest(t, http.MethodPost, "/api/shorten", bytes.NewBuffer(nil)),
 				bd:      repo{},
 			},
 			want: want{
@@ -198,4 +276,14 @@ func TestRedirectURL(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestNotFoundEndpoint(t *testing.T) {
+	router := InitAPI()
+	request := createRequest(t, http.MethodGet, "/asdfalfkasdfkkjasdfasfasfasdfsaf", bytes.NewBuffer([]byte{0}))
+	writer := httptest.NewRecorder()
+	router.ServeHTTP(writer, request)
+	result := writer.Result()
+	result.Body.Close()
+	assert.Equal(t, http.StatusNotFound, result.StatusCode)
 }
