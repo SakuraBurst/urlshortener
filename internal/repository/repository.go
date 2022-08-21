@@ -15,7 +15,7 @@ type MapBd struct {
 	sync.Map
 }
 
-var ErrorNoSuchURL = errors.New("there is no such url")
+var ErrNoSuchURL = errors.New("there is no such url")
 
 type URLShortenerRepository interface {
 	ReadFromBd(context.Context, string) *URLTransfer
@@ -66,31 +66,34 @@ func (m *MapBd) getFromBd(ctx context.Context, urlChan chan<- *URLTransfer, id s
 	var err error = nil
 	untypedURL, ok := m.Load(id)
 	if !ok {
-		err = ErrorNoSuchURL
-	}
-	if ctx.Err() != nil {
+		if ctx.Err() == nil {
+			urlChan <- &URLTransfer{
+				UnShorterURL: nil,
+				Err:          ErrNoSuchURL,
+			}
+		}
 		return
 	}
 	var unShorterURL *url.URL
 	switch v := untypedURL.(type) {
 	case *url.URL:
-		untypedURL = v
+		unShorterURL = v
 	default:
-		if ctx.Err() != nil {
-			return
+		if ctx.Err() == nil {
+			urlChan <- &URLTransfer{
+				UnShorterURL: nil,
+				Err:          errors.New("unexpected error"),
+			}
 		}
-		urlChan <- &URLTransfer{
-			UnShorterURL: nil,
-			Err:          errors.New("unexpected error"),
-		}
-	}
-	if ctx.Err() != nil {
 		return
 	}
-	urlChan <- &URLTransfer{
-		UnShorterURL: unShorterURL,
-		Err:          err,
+	if ctx.Err() == nil {
+		urlChan <- &URLTransfer{
+			UnShorterURL: unShorterURL,
+			Err:          err,
+		}
 	}
+	return
 }
 
 func (m *MapBd) writeToBd(ctx context.Context, resultChan chan<- *ResultTransfer, unShortenURL *url.URL) {
@@ -104,8 +107,8 @@ func (m *MapBd) writeToBd(ctx context.Context, resultChan chan<- *ResultTransfer
 	}
 	result := fmt.Sprintf("%x", h.Sum(nil))[:5]
 	m.Store(result, unShortenURL)
-	if ctx.Err() != nil {
-		return
+	if ctx.Err() == nil {
+		resultChan <- &ResultTransfer{ID: result}
 	}
-	resultChan <- &ResultTransfer{ID: result}
+	return
 }
