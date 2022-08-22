@@ -2,7 +2,7 @@ package controlers
 
 import (
 	"context"
-	"github.com/SakuraBurst/urlshortener/internal/repository"
+	"github.com/SakuraBurst/urlshortener/internal/app/shortener/repository"
 	"net/url"
 	"time"
 )

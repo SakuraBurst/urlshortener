@@ -4,14 +4,21 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/SakuraBurst/urlshortener/internal/controlers"
+	"github.com/SakuraBurst/urlshortener/internal/app/shortener/controlers"
 	"github.com/gin-gonic/gin"
 	"log"
 	"net/http"
 	"net/url"
 )
 
-func InitAPI() *gin.Engine {
+var baseURL string
+
+var ErrNoBaseURL = errors.New("there is no base url")
+var ErrInvalidBaseURL = errors.New("invalid base url")
+
+func InitAPI(initBaseURL string) *gin.Engine {
+	checkBaseUrl(initBaseURL)
+	baseURL = initBaseURL
 	r := gin.Default()
 	r.Use(errorHandler)
 	r.GET("/:hash", RedirectURL)
@@ -21,6 +28,15 @@ func InitAPI() *gin.Engine {
 		v1Api.POST("/shorten", CreateShortenerURLJson)
 	}
 	return r
+}
+
+func checkBaseUrl(baseUrl string) {
+	if len(baseUrl) == 0 {
+		panic(ErrNoBaseURL)
+	}
+	if _, err := url.Parse(baseUrl); err != nil {
+		panic(ErrInvalidBaseURL)
+	}
 }
 
 type ShortenerRequest struct {
@@ -62,11 +78,8 @@ func CreateShortenerURLRaw(c *gin.Context) {
 		c.AbortWithError(http.StatusInternalServerError, err)
 		return
 	}
-	var host = url.URL{
-		Scheme: "http",
-		Host:   "localhost:8080",
-	}
-	host.Path = "/" + id
+	host, _ := url.Parse(baseURL)
+	host.Path = id
 	c.String(http.StatusCreated, host.String())
 }
 
@@ -88,11 +101,8 @@ func CreateShortenerURLJson(c *gin.Context) {
 		c.AbortWithError(http.StatusInternalServerError, err)
 		return
 	}
-	var host = url.URL{
-		Scheme: "http",
-		Host:   "localhost:8080",
-	}
-	host.Path = "/" + id
+	host, _ := url.Parse(baseURL)
+	host.Path = id
 	resp := ShortenerResponse{Result: host.String()}
 	c.JSON(http.StatusCreated, resp)
 }

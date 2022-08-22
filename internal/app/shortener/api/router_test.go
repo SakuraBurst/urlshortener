@@ -3,8 +3,8 @@ package api
 import (
 	"bytes"
 	"context"
-	"github.com/SakuraBurst/urlshortener/internal/controlers"
-	"github.com/SakuraBurst/urlshortener/internal/repository"
+	"github.com/SakuraBurst/urlshortener/internal/app/shortener/controlers"
+	"github.com/SakuraBurst/urlshortener/internal/app/shortener/repository"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"io"
@@ -14,6 +14,8 @@ import (
 	"strings"
 	"testing"
 )
+
+const localhost = "http://localhost:8080"
 
 func createRequest(t *testing.T, method string, url string, body io.Reader) *http.Request {
 	request, err := http.NewRequest(method, url, body)
@@ -105,7 +107,7 @@ func TestCreateShortenerURLRaw(t *testing.T) {
 			positiveTest: false,
 		},
 	}
-	router := InitAPI()
+	router := InitAPI(localhost)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			controlers.SetRepository(tt.args.bd)
@@ -183,7 +185,7 @@ func TestCreateShortenerURLJson(t *testing.T) {
 			positiveTest: false,
 		},
 	}
-	router := InitAPI()
+	router := InitAPI(localhost)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			controlers.SetRepository(tt.args.bd)
@@ -263,7 +265,7 @@ func TestRedirectURL(t *testing.T) {
 			positiveTest: false,
 		},
 	}
-	router := InitAPI()
+	router := InitAPI(localhost)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			controlers.SetRepository(tt.args.bd)
@@ -279,11 +281,55 @@ func TestRedirectURL(t *testing.T) {
 }
 
 func TestNotFoundEndpoint(t *testing.T) {
-	router := InitAPI()
+	router := InitAPI(localhost)
 	request := createRequest(t, http.MethodGet, "/asdfalfkasdfkkjasdfasfasfasdfsaf", bytes.NewBuffer([]byte{0}))
 	writer := httptest.NewRecorder()
 	router.ServeHTTP(writer, request)
 	result := writer.Result()
 	result.Body.Close()
 	assert.Equal(t, http.StatusNotFound, result.StatusCode)
+}
+
+func Test_checkBaseUrl(t *testing.T) {
+	type args struct {
+		baseUrl string
+	}
+	tests := []struct {
+		name       string
+		args       args
+		err        error
+		isPositive bool
+	}{
+		{
+			name:       "Positive test",
+			args:       args{baseUrl: localhost},
+			isPositive: true,
+		},
+		{
+			name:       "NoUrl",
+			args:       args{},
+			isPositive: false,
+			err:        ErrNoBaseURL,
+		},
+		{
+			name:       "BadUrl",
+			args:       args{baseUrl: string([]byte{0})},
+			isPositive: false,
+			err:        ErrInvalidBaseURL,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.isPositive {
+				require.NotPanics(t, func() {
+					checkBaseUrl(tt.args.baseUrl)
+				})
+			} else {
+				require.PanicsWithError(t, tt.err.Error(), func() {
+					checkBaseUrl(tt.args.baseUrl)
+				})
+			}
+
+		})
+	}
 }

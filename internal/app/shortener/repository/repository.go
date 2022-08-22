@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"net/url"
 	"sync"
 )
@@ -16,6 +15,7 @@ type MapBd struct {
 }
 
 var ErrNoSuchURL = errors.New("there is no such url")
+var ErrUnexpectedTypeInMap = errors.New("unexpected type in map")
 
 type URLShortenerRepository interface {
 	ReadFromBd(context.Context, string) *URLTransfer
@@ -39,7 +39,6 @@ func (m *MapBd) ReadFromBd(ctx context.Context, id string) *URLTransfer {
 	case urlTransfer := <-urlChan:
 		return urlTransfer
 	case <-ctx.Done():
-		log.Println("context canceled with ", ctx.Err())
 		close(urlChan)
 		return &URLTransfer{
 			UnShorterURL: nil,
@@ -55,7 +54,6 @@ func (m *MapBd) WriteToBd(ctx context.Context, u *url.URL) *ResultTransfer {
 	case res := <-resultChan:
 		return res
 	case <-ctx.Done():
-		log.Println("context canceled with ", ctx.Err())
 		close(resultChan)
 		return &ResultTransfer{Err: ctx.Err()}
 	}
@@ -82,7 +80,7 @@ func (m *MapBd) getFromBd(ctx context.Context, urlChan chan<- *URLTransfer, id s
 		if ctx.Err() == nil {
 			urlChan <- &URLTransfer{
 				UnShorterURL: nil,
-				Err:          errors.New("unexpected error"),
+				Err:          ErrUnexpectedTypeInMap,
 			}
 		}
 		return
