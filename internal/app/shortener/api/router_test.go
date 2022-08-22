@@ -290,9 +290,9 @@ func TestNotFoundEndpoint(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, result.StatusCode)
 }
 
-func Test_checkBaseUrl(t *testing.T) {
+func Test_checkBaseURL(t *testing.T) {
 	type args struct {
-		baseUrl string
+		baseURL string
 	}
 	tests := []struct {
 		name       string
@@ -302,7 +302,7 @@ func Test_checkBaseUrl(t *testing.T) {
 	}{
 		{
 			name:       "Positive test",
-			args:       args{baseUrl: localhost},
+			args:       args{baseURL: localhost},
 			isPositive: true,
 		},
 		{
@@ -313,7 +313,7 @@ func Test_checkBaseUrl(t *testing.T) {
 		},
 		{
 			name:       "BadUrl",
-			args:       args{baseUrl: string([]byte{0})},
+			args:       args{baseURL: string([]byte{0})},
 			isPositive: false,
 			err:        ErrInvalidBaseURL,
 		},
@@ -322,11 +322,11 @@ func Test_checkBaseUrl(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if tt.isPositive {
 				require.NotPanics(t, func() {
-					checkBaseUrl(tt.args.baseUrl)
+					checkBaseURL(tt.args.baseURL)
 				})
 			} else {
 				require.PanicsWithError(t, tt.err.Error(), func() {
-					checkBaseUrl(tt.args.baseUrl)
+					checkBaseURL(tt.args.baseURL)
 				})
 			}
 

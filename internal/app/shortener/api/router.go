@@ -17,7 +17,7 @@ var ErrNoBaseURL = errors.New("there is no base url")
 var ErrInvalidBaseURL = errors.New("invalid base url")
 
 func InitAPI(initBaseURL string) *gin.Engine {
-	checkBaseUrl(initBaseURL)
+	checkBaseURL(initBaseURL)
 	baseURL = initBaseURL
 	r := gin.Default()
 	r.Use(errorHandler)
@@ -30,11 +30,11 @@ func InitAPI(initBaseURL string) *gin.Engine {
 	return r
 }
 
-func checkBaseUrl(baseUrl string) {
-	if len(baseUrl) == 0 {
+func checkBaseURL(baseURL string) {
+	if len(baseURL) == 0 {
 		panic(ErrNoBaseURL)
 	}
-	if _, err := url.Parse(baseUrl); err != nil {
+	if _, err := url.Parse(baseURL); err != nil {
 		panic(ErrInvalidBaseURL)
 	}
 }

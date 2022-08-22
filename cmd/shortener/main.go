@@ -7,7 +7,7 @@ import (
 )
 
 type config struct {
-	ServerAddress string `env:"SERVER_ADDRESS" envDefault:"http://localhost:8080/"`
+	ServerAddress string `env:"SERVER_ADDRESS" envDefault:"localhost:8080"`
 	BaseURL       string `env:"BASE_URL" envDefault:"http://localhost:8080/"`
 }
 
@@ -17,5 +17,5 @@ func main() {
 		log.Fatal(err)
 	}
 	router := api.InitAPI(cfg.BaseURL)
-	log.Fatal(router.Run(":8080"))
+	log.Fatal(router.Run(cfg.ServerAddress))
 }
