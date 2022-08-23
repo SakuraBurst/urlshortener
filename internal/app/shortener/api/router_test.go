@@ -50,6 +50,9 @@ func (r repo) WriteToBd(ctx context.Context, url *url.URL) *repository.ResultTra
 		Err: nil,
 	}
 }
+func (r repo) SetKeyValue(key string, url *url.URL) {
+	r[key] = url
+}
 
 func TestCreateShortenerURLRaw(t *testing.T) {
 	type want struct {
