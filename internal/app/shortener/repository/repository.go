@@ -20,6 +20,7 @@ var ErrUnexpectedTypeInMap = errors.New("unexpected type in map")
 type URLShortenerRepository interface {
 	ReadFromBd(context.Context, string) *URLTransfer
 	WriteToBd(context.Context, *url.URL) *ResultTransfer
+	SetKeyValue(string, *url.URL)
 }
 
 type URLTransfer struct {
@@ -30,6 +31,10 @@ type URLTransfer struct {
 type ResultTransfer struct {
 	ID  string
 	Err error
+}
+
+func (m *MapBd) SetKeyValue(key string, value *url.URL) {
+	m.Store(key, value)
 }
 
 func (m *MapBd) ReadFromBd(ctx context.Context, id string) *URLTransfer {
