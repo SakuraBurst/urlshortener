@@ -62,7 +62,7 @@ func WriteURL(ctx context.Context, unShortenURL *url.URL) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, time.Second*2)
 	defer cancel()
 	resultTransfer := rep.WriteToBd(ctx, unShortenURL)
-	if resultTransfer.Err == nil {
+	if resultTransfer.Err == nil && backUpEncoder != nil {
 		m.Lock()
 		defer m.Unlock()
 		err := backUpEncoder.Encode(backUpValue{
