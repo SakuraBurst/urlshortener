@@ -3,6 +3,7 @@ package controlers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"github.com/SakuraBurst/urlshortener/internal/app/shortener/repository"
 	"io"
 	"log"
@@ -39,7 +40,7 @@ func InitRepository(repo repository.URLShortenerRepository, backUpPath string) {
 		for decoderError = decoder.Decode(&backUpValue); decoderError == nil; decoderError = decoder.Decode(&backUpValue) {
 			rep.SetKeyValue(backUpValue.Key, backUpValue.Value)
 		}
-		if err != io.EOF {
+		if errors.Is(err, io.EOF) {
 			log.Println(err)
 		}
 
