@@ -456,6 +456,7 @@ func Test_encodingHandler(t *testing.T) {
 					r, err := gzip.NewReader(buf)
 					require.NoError(t, err)
 					b, err := io.ReadAll(r)
+					require.NoError(t, err)
 					assert.Equal(t, tt.want.decodedString, string(b))
 				}
 			} else {
