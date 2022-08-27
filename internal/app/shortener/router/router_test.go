@@ -1,7 +1,8 @@
-package api
+package router
 
 import (
 	"bytes"
+	"compress/gzip"
 	"context"
 	"github.com/SakuraBurst/urlshortener/internal/app/shortener/controlers"
 	"github.com/SakuraBurst/urlshortener/internal/app/shortener/repository"
@@ -74,7 +75,7 @@ func TestCreateShortenerURLRaw(t *testing.T) {
 			name: "positive test",
 			args: args{
 				writer:  httptest.NewRecorder(),
-				request: createRequest(t, http.MethodPost, "/", bytes.NewBuffer([]byte("https://vk.com/feed"))),
+				request: createRequest(t, http.MethodPost, "/", bytes.NewBuffer([]byte("https://test.com/"))),
 				bd:      repo{},
 			},
 			want: want{
@@ -152,7 +153,7 @@ func TestCreateShortenerURLJson(t *testing.T) {
 			name: "positive test",
 			args: args{
 				writer:  httptest.NewRecorder(),
-				request: createRequest(t, http.MethodPost, "/api/shorten", bytes.NewBuffer([]byte(`{"url": "https://vk.com/feed"}`))),
+				request: createRequest(t, http.MethodPost, "/api/shorten", bytes.NewBuffer([]byte(`{"url": "https://test.com/"}`))),
 				bd:      repo{},
 			},
 			want: want{
@@ -333,6 +334,133 @@ func Test_checkBaseURL(t *testing.T) {
 				})
 			}
 
+		})
+	}
+}
+
+func Test_encodingHandler(t *testing.T) {
+	type want struct {
+		statusCode      int
+		contentEncoding string
+		decodedString   string
+	}
+	type request struct {
+		method        string
+		route         string
+		payload       string
+		needToEncode  bool
+		setGzipHeader bool
+	}
+	type args struct {
+		writer  *httptest.ResponseRecorder
+		request request
+		bd      repository.URLShortenerRepository
+	}
+	tests := []struct {
+		name         string
+		args         args
+		want         want
+		positiveTest bool
+		encodingTest bool
+	}{
+		{
+			name: "encoded payload test",
+			args: args{
+				writer: httptest.NewRecorder(),
+				request: request{
+					method:        http.MethodPost,
+					route:         "/",
+					payload:       "https://test.com/",
+					needToEncode:  true,
+					setGzipHeader: true,
+				},
+				bd: repo{},
+			},
+			want: want{
+				statusCode: http.StatusCreated,
+			},
+			positiveTest: true,
+		},
+		{
+			name: "unencoded payload test",
+			args: args{
+				writer: httptest.NewRecorder(),
+				request: request{
+					method:        http.MethodPost,
+					route:         "/",
+					payload:       "https://test.com/",
+					needToEncode:  false,
+					setGzipHeader: true,
+				},
+				bd: repo{},
+			},
+			want: want{
+				statusCode: http.StatusInternalServerError,
+			},
+			positiveTest: false,
+		},
+		{
+			name: "encoded response test",
+			args: args{
+				writer: httptest.NewRecorder(),
+				request: request{
+					method:  http.MethodPost,
+					route:   "/",
+					payload: "https://test.com/",
+				},
+				bd: repo{},
+			},
+			want: want{
+				statusCode:      http.StatusCreated,
+				contentEncoding: "gzip",
+				decodedString:   "http://localhost:8080/a",
+			},
+			positiveTest: true,
+			encodingTest: true,
+		},
+	}
+	router := InitAPI(localhost)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			controlers.SetRepository(tt.args.bd)
+			b := bytes.NewBuffer(nil)
+			if tt.args.request.needToEncode {
+				w := gzip.NewWriter(b)
+				_, err := w.Write([]byte(tt.args.request.payload))
+				require.NoError(t, err)
+				err = w.Close()
+				require.NoError(t, err)
+			} else {
+				_, err := b.WriteString(tt.args.request.payload)
+				require.NoError(t, err)
+			}
+			req := createRequest(t, tt.args.request.method, tt.args.request.route, b)
+			if tt.args.request.setGzipHeader {
+				req.Header.Set("Content-Encoding", "gzip")
+			}
+			if tt.encodingTest {
+				req.Header.Set("Accept-Encoding", "gzip")
+			}
+			router.ServeHTTP(tt.args.writer, req)
+			result := tt.args.writer.Result()
+			assert.Equal(t, tt.want.contentEncoding, result.Header.Get("content-encoding"))
+			assert.Equal(t, tt.want.statusCode, result.StatusCode)
+			buf := bytes.NewBuffer(nil)
+			defer result.Body.Close()
+			_, err := io.Copy(buf, result.Body)
+			require.NoError(t, err)
+			if tt.positiveTest {
+				assert.NotEmpty(t, buf.Bytes())
+				assert.NotEmpty(t, tt.args.bd)
+				if tt.encodingTest {
+					r, err := gzip.NewReader(buf)
+					require.NoError(t, err)
+					b, err := io.ReadAll(r)
+					assert.Equal(t, tt.want.decodedString, string(b))
+				}
+			} else {
+				assert.Empty(t, tt.args.bd)
+			}
 		})
 	}
 }

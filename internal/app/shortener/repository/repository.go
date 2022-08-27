@@ -29,8 +29,9 @@ type URLTransfer struct {
 }
 
 type ResultTransfer struct {
-	ID  string
-	Err error
+	ID          string
+	Err         error
+	IsDuplicate bool
 }
 
 func (m *MapBd) SetKeyValue(key string, value *url.URL) {
@@ -108,8 +109,8 @@ func (m *MapBd) writeToBd(ctx context.Context, resultChan chan<- *ResultTransfer
 		return
 	}
 	result := fmt.Sprintf("%x", h.Sum(nil))[:5]
-	m.Store(result, unShortenURL)
+	_, ok := m.LoadOrStore(result, unShortenURL)
 	if ctx.Err() == nil {
-		resultChan <- &ResultTransfer{ID: result}
+		resultChan <- &ResultTransfer{ID: result, IsDuplicate: ok}
 	}
 }

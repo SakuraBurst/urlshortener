@@ -63,16 +63,22 @@ func WriteURL(ctx context.Context, unShortenURL *url.URL) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, time.Second*2)
 	defer cancel()
 	resultTransfer := rep.WriteToBd(ctx, unShortenURL)
-	if resultTransfer.Err == nil && backUpEncoder != nil {
+	err := writeToBackUp(resultTransfer, unShortenURL)
+	if err != nil {
+		log.Println("error on write to backup" + err.Error())
+	}
+	return resultTransfer.ID, resultTransfer.Err
+}
+
+func writeToBackUp(transfer *repository.ResultTransfer, u *url.URL) error {
+	if transfer.Err == nil && !transfer.IsDuplicate && backUpEncoder != nil {
 		m.Lock()
 		defer m.Unlock()
 		err := backUpEncoder.Encode(backUpValue{
-			Key:   resultTransfer.ID,
-			Value: unShortenURL,
+			Key:   transfer.ID,
+			Value: u,
 		})
-		if err != nil {
-			return "", err
-		}
+		return err
 	}
-	return resultTransfer.ID, resultTransfer.Err
+	return nil
 }
