@@ -24,9 +24,9 @@ func createRequest(t *testing.T, method string, url string, body io.Reader) *htt
 	return request
 }
 
-type repo map[string]*url.URL
+type testBd map[string]*url.URL
 
-func (r repo) ReadFromBd(ctx context.Context, s string) *repository.URLTransfer {
+func (r testBd) ReadFromBd(ctx context.Context, s string) *repository.URLTransfer {
 	if _, ok := r[s]; !ok {
 		return &repository.URLTransfer{
 			UnShorterURL: nil,
@@ -39,7 +39,7 @@ func (r repo) ReadFromBd(ctx context.Context, s string) *repository.URLTransfer 
 	}
 }
 
-func (r repo) WriteToBd(ctx context.Context, url *url.URL) *repository.ResultTransfer {
+func (r testBd) WriteToBd(ctx context.Context, url *url.URL) *repository.ResultTransfer {
 	builder := strings.Builder{}
 	builder.WriteString("a")
 	for _, ok := r[builder.String()]; ok; {
@@ -51,8 +51,8 @@ func (r repo) WriteToBd(ctx context.Context, url *url.URL) *repository.ResultTra
 		Err: nil,
 	}
 }
-func (r repo) SetKeyValue(key string, url *url.URL) {
-	r[key] = url
+func (r testBd) InitRepository(key string) {
+	panic("InitRepository is unsupported for testBd")
 }
 
 func TestCreateShortenerURLRaw(t *testing.T) {
@@ -76,7 +76,7 @@ func TestCreateShortenerURLRaw(t *testing.T) {
 			args: args{
 				writer:  httptest.NewRecorder(),
 				request: createRequest(t, http.MethodPost, "/", bytes.NewBuffer([]byte("https://test.com/"))),
-				bd:      repo{},
+				bd:      testBd{},
 			},
 			want: want{
 				statusCode:  http.StatusCreated,
@@ -89,7 +89,7 @@ func TestCreateShortenerURLRaw(t *testing.T) {
 			args: args{
 				writer:  httptest.NewRecorder(),
 				request: createRequest(t, http.MethodPost, "/", bytes.NewBuffer([]byte{0})),
-				bd:      repo{},
+				bd:      testBd{},
 			},
 			want: want{
 				statusCode:  http.StatusBadRequest,
@@ -102,7 +102,7 @@ func TestCreateShortenerURLRaw(t *testing.T) {
 			args: args{
 				writer:  httptest.NewRecorder(),
 				request: createRequest(t, http.MethodPost, "/", bytes.NewBuffer(nil)),
-				bd:      repo{},
+				bd:      testBd{},
 			},
 			want: want{
 				statusCode:  http.StatusBadRequest,
@@ -154,7 +154,7 @@ func TestCreateShortenerURLJson(t *testing.T) {
 			args: args{
 				writer:  httptest.NewRecorder(),
 				request: createRequest(t, http.MethodPost, "/api/shorten", bytes.NewBuffer([]byte(`{"url": "https://test.com/"}`))),
-				bd:      repo{},
+				bd:      testBd{},
 			},
 			want: want{
 				statusCode:  http.StatusCreated,
@@ -167,7 +167,7 @@ func TestCreateShortenerURLJson(t *testing.T) {
 			args: args{
 				writer:  httptest.NewRecorder(),
 				request: createRequest(t, http.MethodPost, "/api/shorten", bytes.NewBuffer([]byte(`{"url": "\n"}`))),
-				bd:      repo{},
+				bd:      testBd{},
 			},
 			want: want{
 				statusCode:  http.StatusBadRequest,
@@ -180,7 +180,7 @@ func TestCreateShortenerURLJson(t *testing.T) {
 			args: args{
 				writer:  httptest.NewRecorder(),
 				request: createRequest(t, http.MethodPost, "/api/shorten", bytes.NewBuffer(nil)),
-				bd:      repo{},
+				bd:      testBd{},
 			},
 			want: want{
 				statusCode:  http.StatusBadRequest,
@@ -232,7 +232,7 @@ func TestRedirectURL(t *testing.T) {
 			args: args{
 				writer:  httptest.NewRecorder(),
 				request: createRequest(t, http.MethodGet, "/1", nil),
-				bd: repo{"1": &url.URL{
+				bd: testBd{"1": &url.URL{
 					Scheme: "https",
 					Host:   "www.google.com",
 					Path:   "/",
@@ -249,7 +249,7 @@ func TestRedirectURL(t *testing.T) {
 			args: args{
 				writer:  httptest.NewRecorder(),
 				request: createRequest(t, http.MethodGet, "/1", bytes.NewBuffer([]byte{0})),
-				bd:      repo{},
+				bd:      testBd{},
 			},
 			want: want{
 				statusCode: http.StatusNotFound,
@@ -261,7 +261,7 @@ func TestRedirectURL(t *testing.T) {
 			args: args{
 				writer:  httptest.NewRecorder(),
 				request: createRequest(t, http.MethodGet, "/", bytes.NewBuffer(nil)),
-				bd:      repo{},
+				bd:      testBd{},
 			},
 			want: want{
 				statusCode: http.StatusNotFound,
@@ -333,7 +333,6 @@ func Test_checkBaseURL(t *testing.T) {
 					checkBaseURL(tt.args.baseURL)
 				})
 			}
-
 		})
 	}
 }
@@ -374,7 +373,7 @@ func Test_encodingHandler(t *testing.T) {
 					needToEncode:  true,
 					setGzipHeader: true,
 				},
-				bd: repo{},
+				bd: testBd{},
 			},
 			want: want{
 				statusCode: http.StatusCreated,
@@ -392,7 +391,7 @@ func Test_encodingHandler(t *testing.T) {
 					needToEncode:  false,
 					setGzipHeader: true,
 				},
-				bd: repo{},
+				bd: testBd{},
 			},
 			want: want{
 				statusCode: http.StatusInternalServerError,
@@ -408,7 +407,7 @@ func Test_encodingHandler(t *testing.T) {
 					route:   "/",
 					payload: "https://test.com/",
 				},
-				bd: repo{},
+				bd: testBd{},
 			},
 			want: want{
 				statusCode:      http.StatusCreated,
