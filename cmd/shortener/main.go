@@ -2,7 +2,7 @@ package main
 
 import (
 	"flag"
-	"github.com/SakuraBurst/urlshortener/internal/app/shortener/controlers"
+	"github.com/SakuraBurst/urlshortener/internal/app/shortener/controllers"
 	"github.com/SakuraBurst/urlshortener/internal/app/shortener/repository"
 	"github.com/SakuraBurst/urlshortener/internal/app/shortener/router"
 	"github.com/caarlos0/env/v6"
@@ -24,9 +24,11 @@ func main() {
 	flag.StringVar(&cfg.BaseURL, "b", cfg.BaseURL, "Базовый урл сокращенной ссылки")
 	flag.StringVar(&cfg.FileStoragePath, "f", cfg.FileStoragePath, "Путь до бекап файла")
 	flag.Parse()
-	repo := new(repository.MapBd)
-	repo.InitRepository(cfg.FileStoragePath)
-	controlers.SetRepository(repo)
-	r := router.InitAPI(cfg.BaseURL)
+	repo, err := repository.InitRepository(cfg.FileStoragePath)
+	if err != nil {
+		log.Fatal(err)
+	}
+	controller := controllers.InitController(repo)
+	r := router.InitAPI(cfg.BaseURL, controller)
 	log.Fatal(r.Run(cfg.ServerAddress))
 }

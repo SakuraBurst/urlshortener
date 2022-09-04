@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/SakuraBurst/urlshortener/internal/app/shortener/controlers"
+	"github.com/SakuraBurst/urlshortener/internal/app/shortener/controllers"
 	"github.com/gin-gonic/gin"
 	"io"
 	"log"
@@ -13,7 +13,10 @@ import (
 	"net/url"
 )
 
-var baseURL string
+type router struct {
+	baseURL    string
+	controller *controllers.Controller
+}
 
 var ErrNoBaseURL = errors.New("there is no base url")
 var ErrInvalidBaseURL = errors.New("invalid base url")
@@ -32,19 +35,19 @@ func (w encodeResponseWriter) WriteString(s string) (n int, err error) {
 	return w.Writer.Write([]byte(s))
 }
 
-func InitAPI(initBaseURL string) *gin.Engine {
+func InitAPI(initBaseURL string, controller *controllers.Controller) *gin.Engine {
 	checkBaseURL(initBaseURL)
-	baseURL = initBaseURL
-	r := gin.Default()
-	r.Use(errorHandler)
-	r.Use(encodingHandler)
-	r.GET("/:hash", RedirectURL)
-	r.POST("/", CreateShortenerURLRaw)
-	v1Api := r.Group("/api")
+	router := &router{baseURL: initBaseURL, controller: controller}
+	engine := gin.Default()
+	engine.Use(errorHandler)
+	engine.Use(encodingHandler)
+	engine.GET("/:hash", router.RedirectURL)
+	engine.POST("/", router.CreateShortenerURLRaw)
+	v1Api := engine.Group("/api")
 	{
-		v1Api.POST("/shorten", CreateShortenerURLJson)
+		v1Api.POST("/shorten", router.CreateShortenerURLJson)
 	}
-	return r
+	return engine
 }
 
 func checkBaseURL(baseURL string) {
@@ -64,10 +67,10 @@ type ShortenerResponse struct {
 	Result string `json:"result"`
 }
 
-func RedirectURL(c *gin.Context) {
+func (r *router) RedirectURL(c *gin.Context) {
 	id := c.Param("hash")
 
-	unShortenURL, err := controlers.GetURLFromID(c, id)
+	unShortenURL, err := r.controller.GetURLFromID(c, id)
 	if err != nil {
 		c.AbortWithError(http.StatusNotFound, err)
 		return
@@ -75,7 +78,7 @@ func RedirectURL(c *gin.Context) {
 	c.Redirect(http.StatusTemporaryRedirect, unShortenURL.String())
 }
 
-func CreateShortenerURLRaw(c *gin.Context) {
+func (r *router) CreateShortenerURLRaw(c *gin.Context) {
 	body, err := c.GetRawData()
 	if err != nil {
 		c.AbortWithError(http.StatusInternalServerError, err)
@@ -90,17 +93,17 @@ func CreateShortenerURLRaw(c *gin.Context) {
 		c.AbortWithError(http.StatusBadRequest, err)
 		return
 	}
-	id, err := controlers.WriteURL(c, unShortenURL)
+	id, err := r.controller.WriteURL(c, unShortenURL)
 	if err != nil {
 		c.AbortWithError(http.StatusInternalServerError, err)
 		return
 	}
-	host, _ := url.Parse(baseURL)
+	host, _ := url.Parse(r.baseURL)
 	host.Path = id
 	c.String(http.StatusCreated, host.String())
 }
 
-func CreateShortenerURLJson(c *gin.Context) {
+func (r *router) CreateShortenerURLJson(c *gin.Context) {
 	// просто чтобы пройти тесты, мне кажется, что джиновские байнды тут выглядят чище
 	decoder := json.NewDecoder(nil)
 	fmt.Println(decoder)
@@ -113,12 +116,12 @@ func CreateShortenerURLJson(c *gin.Context) {
 		c.AbortWithError(http.StatusBadRequest, err)
 		return
 	}
-	id, err := controlers.WriteURL(c, unShortenURL)
+	id, err := r.controller.WriteURL(c, unShortenURL)
 	if err != nil {
 		c.AbortWithError(http.StatusInternalServerError, err)
 		return
 	}
-	host, _ := url.Parse(baseURL)
+	host, _ := url.Parse(r.baseURL)
 	host.Path = id
 	resp := ShortenerResponse{Result: host.String()}
 	c.JSON(http.StatusCreated, resp)

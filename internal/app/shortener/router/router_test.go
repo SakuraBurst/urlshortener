@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
-	"github.com/SakuraBurst/urlshortener/internal/app/shortener/controlers"
+	"github.com/SakuraBurst/urlshortener/internal/app/shortener/controllers"
 	"github.com/SakuraBurst/urlshortener/internal/app/shortener/repository"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -24,35 +24,23 @@ func createRequest(t *testing.T, method string, url string, body io.Reader) *htt
 	return request
 }
 
-type testBd map[string]*url.URL
+type mockDataBase map[string]*url.URL
 
-func (r testBd) ReadFromBd(ctx context.Context, s string) *repository.URLTransfer {
+func (r mockDataBase) Read(ctx context.Context, s string) (*url.URL, error) {
 	if _, ok := r[s]; !ok {
-		return &repository.URLTransfer{
-			UnShorterURL: nil,
-			Err:          repository.ErrNoSuchURL,
-		}
+		return nil, repository.ErrNoSuchURL
 	}
-	return &repository.URLTransfer{
-		UnShorterURL: r[s],
-		Err:          nil,
-	}
+	return r[s], nil
 }
 
-func (r testBd) WriteToBd(ctx context.Context, url *url.URL) *repository.ResultTransfer {
+func (r mockDataBase) Write(ctx context.Context, url *url.URL) (string, error) {
 	builder := strings.Builder{}
 	builder.WriteString("a")
 	for _, ok := r[builder.String()]; ok; {
 		builder.WriteString("a")
 	}
 	r[builder.String()] = url
-	return &repository.ResultTransfer{
-		ID:  builder.String(),
-		Err: nil,
-	}
-}
-func (r testBd) InitRepository(key string) {
-	panic("InitRepository is unsupported for testBd")
+	return builder.String(), nil
 }
 
 func TestCreateShortenerURLRaw(t *testing.T) {
@@ -63,7 +51,7 @@ func TestCreateShortenerURLRaw(t *testing.T) {
 	type args struct {
 		writer  *httptest.ResponseRecorder
 		request *http.Request
-		bd      repository.URLShortenerRepository
+		db      repository.URLShortenerRepository
 	}
 	tests := []struct {
 		name         string
@@ -76,7 +64,7 @@ func TestCreateShortenerURLRaw(t *testing.T) {
 			args: args{
 				writer:  httptest.NewRecorder(),
 				request: createRequest(t, http.MethodPost, "/", bytes.NewBuffer([]byte("https://test.com/"))),
-				bd:      testBd{},
+				db:      mockDataBase{},
 			},
 			want: want{
 				statusCode:  http.StatusCreated,
@@ -89,7 +77,7 @@ func TestCreateShortenerURLRaw(t *testing.T) {
 			args: args{
 				writer:  httptest.NewRecorder(),
 				request: createRequest(t, http.MethodPost, "/", bytes.NewBuffer([]byte{0})),
-				bd:      testBd{},
+				db:      mockDataBase{},
 			},
 			want: want{
 				statusCode:  http.StatusBadRequest,
@@ -102,7 +90,7 @@ func TestCreateShortenerURLRaw(t *testing.T) {
 			args: args{
 				writer:  httptest.NewRecorder(),
 				request: createRequest(t, http.MethodPost, "/", bytes.NewBuffer(nil)),
-				bd:      testBd{},
+				db:      mockDataBase{},
 			},
 			want: want{
 				statusCode:  http.StatusBadRequest,
@@ -111,10 +99,10 @@ func TestCreateShortenerURLRaw(t *testing.T) {
 			positiveTest: false,
 		},
 	}
-	router := InitAPI(localhost)
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			controlers.SetRepository(tt.args.bd)
+			router := InitAPI(localhost, controllers.InitController(tt.args.db))
 			router.ServeHTTP(tt.args.writer, tt.args.request)
 			result := tt.args.writer.Result()
 			assert.Equal(t, tt.want.contentType, result.Header.Get("content-type"))
@@ -125,9 +113,9 @@ func TestCreateShortenerURLRaw(t *testing.T) {
 			require.NoError(t, err)
 			if tt.positiveTest {
 				assert.NotEmpty(t, buf.Bytes())
-				assert.NotEmpty(t, tt.args.bd)
+				assert.NotEmpty(t, tt.args.db)
 			} else {
-				assert.Empty(t, tt.args.bd)
+				assert.Empty(t, tt.args.db)
 			}
 		})
 	}
@@ -141,7 +129,7 @@ func TestCreateShortenerURLJson(t *testing.T) {
 	type args struct {
 		writer  *httptest.ResponseRecorder
 		request *http.Request
-		bd      repository.URLShortenerRepository
+		db      repository.URLShortenerRepository
 	}
 	tests := []struct {
 		name         string
@@ -154,7 +142,7 @@ func TestCreateShortenerURLJson(t *testing.T) {
 			args: args{
 				writer:  httptest.NewRecorder(),
 				request: createRequest(t, http.MethodPost, "/api/shorten", bytes.NewBuffer([]byte(`{"url": "https://test.com/"}`))),
-				bd:      testBd{},
+				db:      mockDataBase{},
 			},
 			want: want{
 				statusCode:  http.StatusCreated,
@@ -167,7 +155,7 @@ func TestCreateShortenerURLJson(t *testing.T) {
 			args: args{
 				writer:  httptest.NewRecorder(),
 				request: createRequest(t, http.MethodPost, "/api/shorten", bytes.NewBuffer([]byte(`{"url": "\n"}`))),
-				bd:      testBd{},
+				db:      mockDataBase{},
 			},
 			want: want{
 				statusCode:  http.StatusBadRequest,
@@ -180,7 +168,7 @@ func TestCreateShortenerURLJson(t *testing.T) {
 			args: args{
 				writer:  httptest.NewRecorder(),
 				request: createRequest(t, http.MethodPost, "/api/shorten", bytes.NewBuffer(nil)),
-				bd:      testBd{},
+				db:      mockDataBase{},
 			},
 			want: want{
 				statusCode:  http.StatusBadRequest,
@@ -189,10 +177,10 @@ func TestCreateShortenerURLJson(t *testing.T) {
 			positiveTest: false,
 		},
 	}
-	router := InitAPI(localhost)
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			controlers.SetRepository(tt.args.bd)
+			router := InitAPI(localhost, controllers.InitController(tt.args.db))
 			router.ServeHTTP(tt.args.writer, tt.args.request)
 			result := tt.args.writer.Result()
 			assert.Equal(t, tt.want.contentType, result.Header.Get("content-type"))
@@ -203,9 +191,9 @@ func TestCreateShortenerURLJson(t *testing.T) {
 			require.NoError(t, err)
 			if tt.positiveTest {
 				assert.NotEmpty(t, buf.Bytes())
-				assert.NotEmpty(t, tt.args.bd)
+				assert.NotEmpty(t, tt.args.db)
 			} else {
-				assert.Empty(t, tt.args.bd)
+				assert.Empty(t, tt.args.db)
 			}
 		})
 	}
@@ -219,7 +207,7 @@ func TestRedirectURL(t *testing.T) {
 	type args struct {
 		writer  *httptest.ResponseRecorder
 		request *http.Request
-		bd      repository.URLShortenerRepository
+		db      repository.URLShortenerRepository
 	}
 	tests := []struct {
 		name         string
@@ -232,7 +220,7 @@ func TestRedirectURL(t *testing.T) {
 			args: args{
 				writer:  httptest.NewRecorder(),
 				request: createRequest(t, http.MethodGet, "/1", nil),
-				bd: testBd{"1": &url.URL{
+				db: mockDataBase{"1": &url.URL{
 					Scheme: "https",
 					Host:   "www.google.com",
 					Path:   "/",
@@ -249,7 +237,7 @@ func TestRedirectURL(t *testing.T) {
 			args: args{
 				writer:  httptest.NewRecorder(),
 				request: createRequest(t, http.MethodGet, "/1", bytes.NewBuffer([]byte{0})),
-				bd:      testBd{},
+				db:      mockDataBase{},
 			},
 			want: want{
 				statusCode: http.StatusNotFound,
@@ -261,7 +249,7 @@ func TestRedirectURL(t *testing.T) {
 			args: args{
 				writer:  httptest.NewRecorder(),
 				request: createRequest(t, http.MethodGet, "/", bytes.NewBuffer(nil)),
-				bd:      testBd{},
+				db:      mockDataBase{},
 			},
 			want: want{
 				statusCode: http.StatusNotFound,
@@ -269,10 +257,10 @@ func TestRedirectURL(t *testing.T) {
 			positiveTest: false,
 		},
 	}
-	router := InitAPI(localhost)
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			controlers.SetRepository(tt.args.bd)
+			router := InitAPI(localhost, controllers.InitController(tt.args.db))
 			router.ServeHTTP(tt.args.writer, tt.args.request)
 			result := tt.args.writer.Result()
 			result.Body.Close()
@@ -285,7 +273,7 @@ func TestRedirectURL(t *testing.T) {
 }
 
 func TestNotFoundEndpoint(t *testing.T) {
-	router := InitAPI(localhost)
+	router := InitAPI(localhost, controllers.InitController(mockDataBase{}))
 	request := createRequest(t, http.MethodGet, "/asdfalfkasdfkkjasdfasfasfasdfsaf", bytes.NewBuffer([]byte{0}))
 	writer := httptest.NewRecorder()
 	router.ServeHTTP(writer, request)
@@ -353,7 +341,7 @@ func Test_encodingHandler(t *testing.T) {
 	type args struct {
 		writer  *httptest.ResponseRecorder
 		request request
-		bd      repository.URLShortenerRepository
+		db      repository.URLShortenerRepository
 	}
 	tests := []struct {
 		name         string
@@ -373,7 +361,7 @@ func Test_encodingHandler(t *testing.T) {
 					needToEncode:  true,
 					setGzipHeader: true,
 				},
-				bd: testBd{},
+				db: mockDataBase{},
 			},
 			want: want{
 				statusCode: http.StatusCreated,
@@ -391,7 +379,7 @@ func Test_encodingHandler(t *testing.T) {
 					needToEncode:  false,
 					setGzipHeader: true,
 				},
-				bd: testBd{},
+				db: mockDataBase{},
 			},
 			want: want{
 				statusCode: http.StatusInternalServerError,
@@ -407,7 +395,7 @@ func Test_encodingHandler(t *testing.T) {
 					route:   "/",
 					payload: "https://test.com/",
 				},
-				bd: testBd{},
+				db: mockDataBase{},
 			},
 			want: want{
 				statusCode:      http.StatusCreated,
@@ -418,10 +406,10 @@ func Test_encodingHandler(t *testing.T) {
 			encodingTest: true,
 		},
 	}
-	router := InitAPI(localhost)
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			controlers.SetRepository(tt.args.bd)
+			router := InitAPI(localhost, controllers.InitController(tt.args.db))
 			b := bytes.NewBuffer(nil)
 			if tt.args.request.needToEncode {
 				w := gzip.NewWriter(b)
@@ -450,7 +438,7 @@ func Test_encodingHandler(t *testing.T) {
 			require.NoError(t, err)
 			if tt.positiveTest {
 				assert.NotEmpty(t, buf.Bytes())
-				assert.NotEmpty(t, tt.args.bd)
+				assert.NotEmpty(t, tt.args.db)
 				if tt.encodingTest {
 					r, err := gzip.NewReader(buf)
 					require.NoError(t, err)
@@ -459,7 +447,7 @@ func Test_encodingHandler(t *testing.T) {
 					assert.Equal(t, tt.want.decodedString, string(b))
 				}
 			} else {
-				assert.Empty(t, tt.args.bd)
+				assert.Empty(t, tt.args.db)
 			}
 		})
 	}

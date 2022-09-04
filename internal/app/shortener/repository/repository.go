@@ -13,9 +13,9 @@ import (
 	"sync"
 )
 
-type MapBd struct {
-	sync.Map
-	sync.Mutex
+type SyncMapRepo struct {
+	sMap          sync.Map
+	m             sync.Mutex
 	backUpEncoder *json.Encoder
 }
 
@@ -23,9 +23,8 @@ var ErrNoSuchURL = errors.New("there is no such url")
 var ErrUnexpectedTypeInMap = errors.New("unexpected type in map")
 
 type URLShortenerRepository interface {
-	ReadFromBd(context.Context, string) *URLTransfer
-	WriteToBd(context.Context, *url.URL) *ResultTransfer
-	InitRepository(string)
+	Read(context.Context, string) (*url.URL, error)
+	Write(context.Context, *url.URL) (string, error)
 }
 
 type URLTransfer struct {
@@ -43,64 +42,61 @@ type ResultTransfer struct {
 	Err error
 }
 
-func (m *MapBd) InitRepository(backUpPath string) {
+func InitRepository(backUpPath string) (*SyncMapRepo, error) {
+	smr := new(SyncMapRepo)
 	if len(backUpPath) != 0 {
 		file, err := os.OpenFile(backUpPath, os.O_RDWR|os.O_APPEND|os.O_CREATE, os.ModePerm)
 		if err != nil {
 			log.Println(err)
-			return
+			return nil, err
 		}
 		decoder := json.NewDecoder(file)
-		backUpValue := backUpValue{}
+		backUpVal := backUpValue{}
 		var decoderError error
-		for decoderError = decoder.Decode(&backUpValue); decoderError == nil; decoderError = decoder.Decode(&backUpValue) {
-			m.Store(backUpValue.Key, backUpValue.Value)
+		for decoderError = decoder.Decode(&backUpVal); decoderError == nil; decoderError = decoder.Decode(&backUpVal) {
+			smr.sMap.Store(backUpVal.Key, backUpVal.Value)
+			backUpVal = backUpValue{}
 		}
 		if errors.Is(err, io.EOF) {
 			log.Println(err)
 		}
 
-		m.backUpEncoder = json.NewEncoder(file)
+		smr.backUpEncoder = json.NewEncoder(file)
 	}
+	return smr, nil
 }
 
-func (m *MapBd) ReadFromBd(ctx context.Context, id string) *URLTransfer {
-	urlChan := make(chan *URLTransfer)
-	go m.getFromBd(ctx, urlChan, id)
+func (smr *SyncMapRepo) Read(ctx context.Context, id string) (*url.URL, error) {
+	urlChan := make(chan *URLTransfer, 1)
+	go smr.getFromDB(urlChan, id)
 	select {
 	case urlTransfer := <-urlChan:
-		return urlTransfer
+		return urlTransfer.UnShorterURL, urlTransfer.Err
 	case <-ctx.Done():
-		close(urlChan)
-		return &URLTransfer{
-			UnShorterURL: nil,
-			Err:          ctx.Err(),
-		}
+		fmt.Println(ctx, ctx.Err())
+		return nil, ctx.Err()
 	}
 }
 
-func (m *MapBd) WriteToBd(ctx context.Context, u *url.URL) *ResultTransfer {
-	resultChan := make(chan *ResultTransfer)
-	go m.writeToBd(ctx, resultChan, u)
+func (smr *SyncMapRepo) Write(ctx context.Context, u *url.URL) (string, error) {
+	fmt.Println("?")
+	resultChan := make(chan *ResultTransfer, 1)
+	go smr.writeToDB(resultChan, u)
 	select {
 	case res := <-resultChan:
-		return res
+		return res.ID, res.Err
 	case <-ctx.Done():
-		close(resultChan)
-		return &ResultTransfer{Err: ctx.Err()}
+		return "", ctx.Err()
 	}
-
 }
 
-func (m *MapBd) getFromBd(ctx context.Context, urlChan chan<- *URLTransfer, id string) {
+func (smr *SyncMapRepo) getFromDB(urlChan chan<- *URLTransfer, id string) {
 	var err error = nil
-	untypedURL, ok := m.Load(id)
+	untypedURL, ok := smr.sMap.Load(id)
 	if !ok {
-		if ctx.Err() == nil {
-			urlChan <- &URLTransfer{
-				UnShorterURL: nil,
-				Err:          ErrNoSuchURL,
-			}
+		urlChan <- &URLTransfer{
+			UnShorterURL: nil,
+			Err:          ErrNoSuchURL,
 		}
 		return
 	}
@@ -109,48 +105,41 @@ func (m *MapBd) getFromBd(ctx context.Context, urlChan chan<- *URLTransfer, id s
 	case *url.URL:
 		unShorterURL = v
 	default:
-		if ctx.Err() == nil {
-			urlChan <- &URLTransfer{
-				UnShorterURL: nil,
-				Err:          ErrUnexpectedTypeInMap,
-			}
+		urlChan <- &URLTransfer{
+			UnShorterURL: nil,
+			Err:          ErrUnexpectedTypeInMap,
 		}
 		return
 	}
-	if ctx.Err() == nil {
-		urlChan <- &URLTransfer{
-			UnShorterURL: unShorterURL,
-			Err:          err,
-		}
+	urlChan <- &URLTransfer{
+		UnShorterURL: unShorterURL,
+		Err:          err,
 	}
+
 }
 
-func (m *MapBd) writeToBd(ctx context.Context, resultChan chan<- *ResultTransfer, unShortenURL *url.URL) {
+func (smr *SyncMapRepo) writeToDB(resultChan chan<- *ResultTransfer, unShortenURL *url.URL) {
 	h := sha1.New()
 	_, err := io.WriteString(h, unShortenURL.String())
 	if err != nil {
-		if ctx.Err() == nil {
-			resultChan <- &ResultTransfer{Err: err}
-		}
+		resultChan <- &ResultTransfer{Err: err}
 		return
 	}
 	key := fmt.Sprintf("%x", h.Sum(nil))[:5]
-	_, ok := m.LoadOrStore(key, unShortenURL)
-	if !ok && m.backUpEncoder != nil {
-		m.Lock()
-		defer m.Unlock()
-		err := m.backUpEncoder.Encode(backUpValue{
+	_, ok := smr.sMap.LoadOrStore(key, unShortenURL)
+	if !ok && smr.backUpEncoder != nil {
+		smr.m.Lock()
+		defer smr.m.Unlock()
+		err := smr.backUpEncoder.Encode(backUpValue{
 			Key:   key,
 			Value: unShortenURL,
 		})
 		if err != nil {
-			if ctx.Err() == nil {
-				resultChan <- &ResultTransfer{Err: err}
-			}
+			resultChan <- &ResultTransfer{Err: err}
+
 			return
 		}
 	}
-	if ctx.Err() == nil {
-		resultChan <- &ResultTransfer{ID: key}
-	}
+	resultChan <- &ResultTransfer{ID: key}
+
 }
