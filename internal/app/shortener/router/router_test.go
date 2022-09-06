@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"errors"
 	"github.com/SakuraBurst/urlshortener/internal/app/shortener/controllers"
 	"github.com/SakuraBurst/urlshortener/internal/app/shortener/repository"
 	"github.com/stretchr/testify/assert"
@@ -26,21 +27,34 @@ func createRequest(t *testing.T, method string, url string, body io.Reader) *htt
 
 type mockDataBase map[string]*url.URL
 
-func (r mockDataBase) Read(ctx context.Context, s string) (*url.URL, error) {
+func (r mockDataBase) Read(ctx context.Context, s string) (any, error) {
 	if _, ok := r[s]; !ok {
-		return nil, repository.ErrNoSuchURL
+		return nil, repository.ErrNoSuchValue
 	}
 	return r[s], nil
 }
 
-func (r mockDataBase) Write(ctx context.Context, url *url.URL) (string, error) {
+func (r mockDataBase) Create(ctx context.Context, val any) (string, error) {
+	u, ok := val.(*url.URL)
+	if !ok {
+		return "", errors.New("wrong type")
+	}
 	builder := strings.Builder{}
 	builder.WriteString("a")
 	for _, ok := r[builder.String()]; ok; {
 		builder.WriteString("a")
 	}
-	r[builder.String()] = url
+	r[builder.String()] = u
 	return builder.String(), nil
+}
+
+func (r mockDataBase) Update(ctx context.Context, id string, val any) error {
+	u, ok := val.(*url.URL)
+	if !ok {
+		return errors.New("wrong type")
+	}
+	r[id] = u
+	return nil
 }
 
 func TestCreateShortenerURLRaw(t *testing.T) {
@@ -51,7 +65,7 @@ func TestCreateShortenerURLRaw(t *testing.T) {
 	type args struct {
 		writer  *httptest.ResponseRecorder
 		request *http.Request
-		db      repository.URLShortenerRepository
+		db      repository.Repository
 	}
 	tests := []struct {
 		name         string
@@ -129,7 +143,7 @@ func TestCreateShortenerURLJson(t *testing.T) {
 	type args struct {
 		writer  *httptest.ResponseRecorder
 		request *http.Request
-		db      repository.URLShortenerRepository
+		db      repository.Repository
 	}
 	tests := []struct {
 		name         string
@@ -207,7 +221,7 @@ func TestRedirectURL(t *testing.T) {
 	type args struct {
 		writer  *httptest.ResponseRecorder
 		request *http.Request
-		db      repository.URLShortenerRepository
+		db      repository.Repository
 	}
 	tests := []struct {
 		name         string
@@ -341,7 +355,7 @@ func Test_encodingHandler(t *testing.T) {
 	type args struct {
 		writer  *httptest.ResponseRecorder
 		request request
-		db      repository.URLShortenerRepository
+		db      repository.Repository
 	}
 	tests := []struct {
 		name         string

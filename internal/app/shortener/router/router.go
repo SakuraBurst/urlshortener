@@ -16,6 +16,7 @@ import (
 type router struct {
 	baseURL    string
 	controller *controllers.Controller
+	secretKey  []byte
 }
 
 var ErrNoBaseURL = errors.New("there is no base url")
@@ -37,10 +38,11 @@ func (w encodeResponseWriter) WriteString(s string) (n int, err error) {
 
 func InitAPI(initBaseURL string, controller *controllers.Controller) *gin.Engine {
 	checkBaseURL(initBaseURL)
-	router := &router{baseURL: initBaseURL, controller: controller}
+	router := &router{baseURL: initBaseURL, controller: controller, secretKey: []byte("secret key")}
 	engine := gin.Default()
 	engine.Use(errorHandler)
 	engine.Use(encodingHandler)
+	engine.Use(authHandler)
 	engine.GET("/:hash", router.RedirectURL)
 	engine.POST("/", router.CreateShortenerURLRaw)
 	v1Api := engine.Group("/api")
@@ -152,6 +154,10 @@ func encodingHandler(c *gin.Context) {
 		c.Header("Content-Encoding", "gzip")
 	}
 	c.Next()
+}
+
+func authHandler(c *gin.Context) {
+	c.Cookie("auth")
 }
 
 func errorHandler(c *gin.Context) {

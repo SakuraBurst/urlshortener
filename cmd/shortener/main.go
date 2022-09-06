@@ -24,7 +24,7 @@ func main() {
 	flag.StringVar(&cfg.BaseURL, "b", cfg.BaseURL, "Базовый урл сокращенной ссылки")
 	flag.StringVar(&cfg.FileStoragePath, "f", cfg.FileStoragePath, "Путь до бекап файла")
 	flag.Parse()
-	repo, err := repository.InitRepository(cfg.FileStoragePath)
+	repo, err := repository.InitURLRepository(cfg.FileStoragePath)
 	if err != nil {
 		log.Fatal(err)
 	}
