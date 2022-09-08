@@ -2,22 +2,21 @@ package repository
 
 import (
 	"context"
+	"fmt"
+	"github.com/SakuraBurst/urlshortener/internal/app/shortener/types"
 	"strconv"
 
-	"fmt"
-
-	"net/url"
 	"sync"
 )
 
 type SyncMapUserRepo struct {
 	sMap   sync.Map
 	m      sync.Mutex
-	lastId int
+	lastID int
 }
 
-func InitUserRepository(backUpPath string) (Repository, error) {
-	smr := new(SyncMapUserRepo)
+func InitUserRepository() (Repository, error) {
+	smr := &SyncMapUserRepo{lastID: 1}
 	return smr, nil
 }
 
@@ -34,10 +33,10 @@ func (smr *SyncMapUserRepo) Read(ctx context.Context, id string) (any, error) {
 }
 
 func (smr *SyncMapUserRepo) Create(ctx context.Context, v any) (string, error) {
-	resultChan := make(chan *resultTransfer, 1)
-	u, ok := v.([]*url.URL)
+	resultChan := make(chan *resultIdTransfer, 1)
+	u, ok := v.([]*types.URLShorter)
 	if u != nil && !ok {
-		return "", repositoryTypeError(v)
+		return "", TypeError(v)
 	}
 	go smr.writeToDB(resultChan, u)
 	select {
@@ -49,10 +48,10 @@ func (smr *SyncMapUserRepo) Create(ctx context.Context, v any) (string, error) {
 }
 
 func (smr *SyncMapUserRepo) Update(ctx context.Context, id string, v any) error {
-	resultChan := make(chan *resultTransfer, 1)
-	u, ok := v.([]*url.URL)
+	resultChan := make(chan *resultIdTransfer, 1)
+	u, ok := v.([]*types.URLShorter)
 	if !ok {
-		return repositoryTypeError(v)
+		return TypeError(v)
 	}
 	go smr.updateInDB(resultChan, id, u)
 	select {
@@ -64,16 +63,17 @@ func (smr *SyncMapUserRepo) Update(ctx context.Context, id string, v any) error 
 }
 
 func (smr *SyncMapUserRepo) getFromDB(urlChan chan<- *valueTransfer, id string) {
-	var err error = nil
+	var err error
 	sliceOfURL, ok := smr.sMap.Load(id)
 	if !ok {
+		fmt.Println(id)
 		urlChan <- &valueTransfer{
 			value: nil,
 			err:   ErrNoSuchValue,
 		}
 		return
 	}
-	typedSliceOfURL, ok := sliceOfURL.([]*url.URL)
+	typedSliceOfURL, ok := sliceOfURL.([]*types.URLShorter)
 	if !ok {
 		urlChan <- &valueTransfer{
 			value: nil,
@@ -88,22 +88,20 @@ func (smr *SyncMapUserRepo) getFromDB(urlChan chan<- *valueTransfer, id string) 
 
 }
 
-func (smr *SyncMapUserRepo) writeToDB(resultChan chan<- *resultTransfer, v []*url.URL) {
+func (smr *SyncMapUserRepo) writeToDB(resultChan chan<- *resultIdTransfer, v []*types.URLShorter) {
 	smr.m.Lock()
-	id := strconv.Itoa(smr.lastId)
-	smr.lastId++
+	id := strconv.Itoa(smr.lastID)
+	smr.lastID++
 	smr.m.Unlock()
-	if v != nil {
-		smr.sMap.Store(id, v)
-	}
-	smr.sMap.Store(id, []*url.URL{})
-	resultChan <- &resultTransfer{
+	smr.sMap.Store(id, v)
+
+	resultChan <- &resultIdTransfer{
 		id: id,
 	}
 }
-func (smr *SyncMapUserRepo) updateInDB(resultChan chan<- *resultTransfer, id string, u any) {
+func (smr *SyncMapUserRepo) updateInDB(resultChan chan<- *resultIdTransfer, id string, u any) {
 	smr.sMap.Store(id, u)
-	resultChan <- &resultTransfer{
+	resultChan <- &resultIdTransfer{
 		id: id,
 	}
 }

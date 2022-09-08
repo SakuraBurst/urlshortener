@@ -116,7 +116,7 @@ func TestMapBd_WriteToBd(t *testing.T) {
 		name         string
 		preset       preset
 		args         args
-		want         *resultTransfer
+		want         *resultIdTransfer
 		positiveTest bool
 	}{
 		{
@@ -126,7 +126,7 @@ func TestMapBd_WriteToBd(t *testing.T) {
 				ctx: context.Background(),
 				u:   UnShorterURL,
 			},
-			want: &resultTransfer{
+			want: &resultIdTransfer{
 				id:  "50334",
 				err: nil,
 			},
@@ -143,7 +143,7 @@ func TestMapBd_WriteToBd(t *testing.T) {
 				}(),
 				u: UnShorterURL,
 			},
-			want: &resultTransfer{
+			want: &resultIdTransfer{
 				id:  "",
 				err: context.Canceled,
 			},
@@ -264,24 +264,24 @@ func TestMapBd_writeToBd(t *testing.T) {
 		Map *SyncMapURLRepo
 	}
 	type args struct {
-		resultChan chan *resultTransfer
+		resultChan chan *resultIdTransfer
 		u          *url.URL
 	}
 	tests := []struct {
 		name         string
 		preset       preset
 		args         args
-		want         *resultTransfer
+		want         *resultIdTransfer
 		positiveTest bool
 	}{
 		{
 			name:   "Positive test",
 			preset: preset{Map: &SyncMapURLRepo{}},
 			args: args{
-				resultChan: make(chan *resultTransfer),
+				resultChan: make(chan *resultIdTransfer),
 				u:          UnShorterURL,
 			},
-			want: &resultTransfer{
+			want: &resultIdTransfer{
 				id:  "50334",
 				err: nil,
 			},

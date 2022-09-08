@@ -19,7 +19,7 @@ type SyncMapURLRepo struct {
 	backUpEncoder *json.Encoder
 }
 
-var ErrNoSuchValue = errors.New("there is no such url")
+var ErrNoSuchValue = errors.New("there is no such value in repo")
 var ErrUnexpectedTypeInMap = errors.New("unexpected type in map")
 
 type Repository interface {
@@ -38,12 +38,12 @@ type backUpValue struct {
 	Value *url.URL
 }
 
-type resultTransfer struct {
+type resultIdTransfer struct {
 	id  string
 	err error
 }
 
-func repositoryTypeError(v any) error {
+func TypeError(v any) error {
 	return errors.New(fmt.Sprintf("repository dont support this type of value - %T", v))
 }
 
@@ -84,10 +84,10 @@ func (smr *SyncMapURLRepo) Read(ctx context.Context, id string) (any, error) {
 }
 
 func (smr *SyncMapURLRepo) Create(ctx context.Context, v any) (string, error) {
-	resultChan := make(chan *resultTransfer, 1)
+	resultChan := make(chan *resultIdTransfer, 1)
 	u, ok := v.(*url.URL)
 	if !ok {
-		return "", repositoryTypeError(v)
+		return "", TypeError(v)
 	}
 	go smr.writeToDB(resultChan, u)
 	select {
@@ -99,10 +99,10 @@ func (smr *SyncMapURLRepo) Create(ctx context.Context, v any) (string, error) {
 }
 
 func (smr *SyncMapURLRepo) Update(ctx context.Context, id string, v any) error {
-	resultChan := make(chan *resultTransfer, 1)
+	resultChan := make(chan *resultIdTransfer, 1)
 	u, ok := v.(*url.URL)
 	if !ok {
-		return repositoryTypeError(v)
+		return TypeError(v)
 	}
 	go smr.updateInDB(resultChan, id, u)
 	select {
@@ -138,11 +138,11 @@ func (smr *SyncMapURLRepo) getFromDB(valueChan chan<- *valueTransfer, id string)
 
 }
 
-func (smr *SyncMapURLRepo) writeToDB(resultChan chan<- *resultTransfer, unShortenURL *url.URL) {
+func (smr *SyncMapURLRepo) writeToDB(resultChan chan<- *resultIdTransfer, unShortenURL *url.URL) {
 	h := sha1.New()
 	_, err := io.WriteString(h, unShortenURL.String())
 	if err != nil {
-		resultChan <- &resultTransfer{err: err}
+		resultChan <- &resultIdTransfer{err: err}
 		return
 	}
 	key := fmt.Sprintf("%x", h.Sum(nil))[:5]
@@ -155,15 +155,15 @@ func (smr *SyncMapURLRepo) writeToDB(resultChan chan<- *resultTransfer, unShorte
 			Value: unShortenURL,
 		})
 		if err != nil {
-			resultChan <- &resultTransfer{err: err}
+			resultChan <- &resultIdTransfer{err: err}
 			return
 		}
 	}
-	resultChan <- &resultTransfer{id: key}
+	resultChan <- &resultIdTransfer{id: key}
 }
-func (smr *SyncMapURLRepo) updateInDB(resultChan chan<- *resultTransfer, id string, u any) {
+func (smr *SyncMapURLRepo) updateInDB(resultChan chan<- *resultIdTransfer, id string, u any) {
 	smr.sMap.Store(id, u)
-	resultChan <- &resultTransfer{
+	resultChan <- &resultIdTransfer{
 		id: id,
 	}
 }

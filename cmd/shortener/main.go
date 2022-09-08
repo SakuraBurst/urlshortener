@@ -24,11 +24,15 @@ func main() {
 	flag.StringVar(&cfg.BaseURL, "b", cfg.BaseURL, "Базовый урл сокращенной ссылки")
 	flag.StringVar(&cfg.FileStoragePath, "f", cfg.FileStoragePath, "Путь до бекап файла")
 	flag.Parse()
-	repo, err := repository.InitURLRepository(cfg.FileStoragePath)
+	urlRepo, err := repository.InitURLRepository(cfg.FileStoragePath)
 	if err != nil {
 		log.Fatal(err)
 	}
-	controller := controllers.InitController(repo)
-	r := router.InitAPI(cfg.BaseURL, controller)
+	userRepo, err := repository.InitUserRepository()
+	if err != nil {
+		log.Fatal(err)
+	}
+	controller := controllers.InitController(cfg.BaseURL, urlRepo, userRepo)
+	r := router.InitAPI(controller)
 	log.Fatal(r.Run(cfg.ServerAddress))
 }

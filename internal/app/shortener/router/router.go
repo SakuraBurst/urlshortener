@@ -6,21 +6,18 @@ import (
 	"errors"
 	"fmt"
 	"github.com/SakuraBurst/urlshortener/internal/app/shortener/controllers"
+	"github.com/SakuraBurst/urlshortener/internal/app/shortener/token"
 	"github.com/gin-gonic/gin"
 	"io"
 	"log"
 	"net/http"
 	"net/url"
+	"time"
 )
 
 type router struct {
-	baseURL    string
 	controller *controllers.Controller
-	secretKey  []byte
 }
-
-var ErrNoBaseURL = errors.New("there is no base url")
-var ErrInvalidBaseURL = errors.New("invalid base url")
 
 type encodeResponseWriter struct {
 	gin.ResponseWriter
@@ -28,7 +25,6 @@ type encodeResponseWriter struct {
 }
 
 func (w encodeResponseWriter) Write(p []byte) (n int, err error) {
-	fmt.Println(string(p))
 	return w.Writer.Write(p)
 }
 
@@ -36,13 +32,12 @@ func (w encodeResponseWriter) WriteString(s string) (n int, err error) {
 	return w.Writer.Write([]byte(s))
 }
 
-func InitAPI(initBaseURL string, controller *controllers.Controller) *gin.Engine {
-	checkBaseURL(initBaseURL)
-	router := &router{baseURL: initBaseURL, controller: controller, secretKey: []byte("secret key")}
+func InitAPI(controller *controllers.Controller) *gin.Engine {
+	router := &router{controller: controller}
 	engine := gin.Default()
 	engine.Use(errorHandler)
 	engine.Use(encodingHandler)
-	engine.Use(authHandler)
+	engine.Use(router.authHandler)
 	engine.GET("/:hash", router.RedirectURL)
 	engine.POST("/", router.CreateShortenerURLRaw)
 	v1Api := engine.Group("/api")
@@ -50,15 +45,6 @@ func InitAPI(initBaseURL string, controller *controllers.Controller) *gin.Engine
 		v1Api.POST("/shorten", router.CreateShortenerURLJson)
 	}
 	return engine
-}
-
-func checkBaseURL(baseURL string) {
-	if len(baseURL) == 0 {
-		panic(ErrNoBaseURL)
-	}
-	if _, err := url.Parse(baseURL); err != nil {
-		panic(ErrInvalidBaseURL)
-	}
 }
 
 type ShortenerRequest struct {
@@ -95,14 +81,12 @@ func (r *router) CreateShortenerURLRaw(c *gin.Context) {
 		c.AbortWithError(http.StatusBadRequest, err)
 		return
 	}
-	id, err := r.controller.WriteURL(c, unShortenURL)
+	u, err := r.controller.WriteURL(c, unShortenURL, c.GetHeader("auth"))
 	if err != nil {
 		c.AbortWithError(http.StatusInternalServerError, err)
 		return
 	}
-	host, _ := url.Parse(r.baseURL)
-	host.Path = id
-	c.String(http.StatusCreated, host.String())
+	c.String(http.StatusCreated, u)
 }
 
 func (r *router) CreateShortenerURLJson(c *gin.Context) {
@@ -118,14 +102,12 @@ func (r *router) CreateShortenerURLJson(c *gin.Context) {
 		c.AbortWithError(http.StatusBadRequest, err)
 		return
 	}
-	id, err := r.controller.WriteURL(c, unShortenURL)
+	u, err := r.controller.WriteURL(c, unShortenURL, c.GetHeader("auth"))
 	if err != nil {
 		c.AbortWithError(http.StatusInternalServerError, err)
 		return
 	}
-	host, _ := url.Parse(r.baseURL)
-	host.Path = id
-	resp := ShortenerResponse{Result: host.String()}
+	resp := ShortenerResponse{Result: u}
 	c.JSON(http.StatusCreated, resp)
 }
 
@@ -156,13 +138,26 @@ func encodingHandler(c *gin.Context) {
 	c.Next()
 }
 
-func authHandler(c *gin.Context) {
-	c.Cookie("auth")
+func (r *router) authHandler(c *gin.Context) {
+	t, err := c.Cookie("auth")
+	if err != nil || !token.IsTokenValid(t) {
+		t, err = r.controller.CreateUser(c)
+		if err != nil {
+			c.AbortWithError(http.StatusInternalServerError, err)
+			return
+		}
+		c.SetCookie("auth", t, int(time.Hour*24), "", "", false, false)
+
+	}
+	c.Request.Header.Set("auth", t)
+	c.Next()
 }
 
 func errorHandler(c *gin.Context) {
 	c.Next()
+	fmt.Println("____________________________________________________________________________")
 	for _, e := range c.Errors {
 		log.Println(e)
 	}
+	fmt.Println("____________________________________________________________________________")
 }
