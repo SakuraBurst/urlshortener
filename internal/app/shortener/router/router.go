@@ -43,6 +43,10 @@ func InitAPI(controller *controllers.Controller) *gin.Engine {
 	v1Api := engine.Group("/api")
 	{
 		v1Api.POST("/shorten", router.CreateShortenerURLJson)
+		userGroup := v1Api.Group("/user")
+		{
+			userGroup.GET("/urls", router.GetUserURLS)
+		}
 	}
 	return engine
 }
@@ -87,6 +91,19 @@ func (r *router) CreateShortenerURLRaw(c *gin.Context) {
 		return
 	}
 	c.String(http.StatusCreated, u)
+}
+
+func (r *router) GetUserURLS(c *gin.Context) {
+	u, err := r.controller.GetUser(c, c.GetHeader("auth"))
+	if err != nil {
+		c.AbortWithError(http.StatusInternalServerError, err)
+		return
+	}
+	if len(u) == 0 {
+		c.AbortWithStatus(http.StatusNoContent)
+		return
+	}
+	c.JSON(http.StatusOK, u)
 }
 
 func (r *router) CreateShortenerURLJson(c *gin.Context) {

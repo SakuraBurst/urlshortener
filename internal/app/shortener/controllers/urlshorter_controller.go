@@ -49,7 +49,7 @@ func (c *Controller) WriteURL(ctx context.Context, unShortenURL *url.URL, userTo
 	host.Path = id
 	err = c.UpdateUser(ctx, userToken, &types.URLShorter{
 		ShortURL:    host.String(),
-		OriginalURL: nil,
+		OriginalURL: unShortenURL.String(),
 	})
 	return host.String(), err
 }
