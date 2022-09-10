@@ -44,7 +44,7 @@ type resultIdTransfer struct {
 }
 
 func TypeError(v any) error {
-	return errors.New(fmt.Sprintf("repository dont support this type of value - %T", v))
+	return fmt.Errorf("repository dont support this type of value - %T", v)
 }
 
 func InitURLRepository(backUpPath string) (Repository, error) {

@@ -163,7 +163,7 @@ func (r *router) authHandler(c *gin.Context) {
 			c.AbortWithError(http.StatusInternalServerError, err)
 			return
 		}
-		c.SetCookie("auth", t, int(time.Hour*24), "", "", false, false)
+		c.SetCookie("auth", t, time.Now().Add(time.Hour*24).Nanosecond(), "", "", false, true)
 
 	}
 	c.Request.Header.Set("auth", t)

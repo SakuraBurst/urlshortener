@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
-	"errors"
 	"fmt"
 	"github.com/SakuraBurst/urlshortener/internal/app/shortener/controllers"
 	"github.com/SakuraBurst/urlshortener/internal/app/shortener/repository"
@@ -40,7 +39,7 @@ func (r mockURLDataBase) Create(ctx context.Context, val any) (string, error) {
 	u, ok := val.(*url.URL)
 
 	if !ok {
-		return "", errors.New(fmt.Sprintf("URL repository dont support this type of value - %T", val))
+		return "", fmt.Errorf("URL repository dont support this type of value - %T", val)
 	}
 	builder := strings.Builder{}
 	builder.WriteString("a")
@@ -54,7 +53,7 @@ func (r mockURLDataBase) Create(ctx context.Context, val any) (string, error) {
 func (r mockURLDataBase) Update(ctx context.Context, id string, val any) error {
 	u, ok := val.(*url.URL)
 	if !ok {
-		return errors.New(fmt.Sprintf("URL repository dont support this type of value - %T", val))
+		return fmt.Errorf("URL repository dont support this type of value - %T", val)
 	}
 	r[id] = u
 	return nil
@@ -72,7 +71,7 @@ func (r mockUserDataBase) Read(ctx context.Context, s string) (any, error) {
 func (r mockUserDataBase) Create(ctx context.Context, val any) (string, error) {
 	u, ok := val.([]*types.URLShorter)
 	if !ok {
-		return "", errors.New(fmt.Sprintf("USER repository dont support this type of value - %T", val))
+		return "", fmt.Errorf("USER repository dont support this type of value - %T", val)
 	}
 	builder := strings.Builder{}
 	builder.WriteString("1")
@@ -86,7 +85,7 @@ func (r mockUserDataBase) Create(ctx context.Context, val any) (string, error) {
 func (r mockUserDataBase) Update(ctx context.Context, id string, val any) error {
 	u, ok := val.([]*types.URLShorter)
 	if !ok {
-		return errors.New(fmt.Sprintf("USER repository dont support this type of value - %T", val))
+		return fmt.Errorf("USER repository dont support this type of value - %T", val)
 	}
 	r[id] = u
 	return nil
