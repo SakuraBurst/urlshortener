@@ -164,7 +164,6 @@ func (r *router) authHandler(c *gin.Context) {
 			return
 		}
 		c.SetCookie("auth", t, time.Now().Add(time.Hour*24).Nanosecond(), "", "", false, true)
-
 	}
 	c.Request.Header.Set("auth", t)
 	c.Next()
