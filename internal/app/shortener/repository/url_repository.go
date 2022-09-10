@@ -38,7 +38,7 @@ type backUpValue struct {
 	Value *url.URL
 }
 
-type resultIdTransfer struct {
+type resultIDTransfer struct {
 	id  string
 	err error
 }
@@ -84,7 +84,7 @@ func (smr *SyncMapURLRepo) Read(ctx context.Context, id string) (any, error) {
 }
 
 func (smr *SyncMapURLRepo) Create(ctx context.Context, v any) (string, error) {
-	resultChan := make(chan *resultIdTransfer, 1)
+	resultChan := make(chan *resultIDTransfer, 1)
 	u, ok := v.(*url.URL)
 	if !ok {
 		return "", TypeError(v)
@@ -99,7 +99,7 @@ func (smr *SyncMapURLRepo) Create(ctx context.Context, v any) (string, error) {
 }
 
 func (smr *SyncMapURLRepo) Update(ctx context.Context, id string, v any) error {
-	resultChan := make(chan *resultIdTransfer, 1)
+	resultChan := make(chan *resultIDTransfer, 1)
 	u, ok := v.(*url.URL)
 	if !ok {
 		return TypeError(v)
@@ -138,11 +138,11 @@ func (smr *SyncMapURLRepo) getFromDB(valueChan chan<- *valueTransfer, id string)
 
 }
 
-func (smr *SyncMapURLRepo) writeToDB(resultChan chan<- *resultIdTransfer, unShortenURL *url.URL) {
+func (smr *SyncMapURLRepo) writeToDB(resultChan chan<- *resultIDTransfer, unShortenURL *url.URL) {
 	h := sha1.New()
 	_, err := io.WriteString(h, unShortenURL.String())
 	if err != nil {
-		resultChan <- &resultIdTransfer{err: err}
+		resultChan <- &resultIDTransfer{err: err}
 		return
 	}
 	key := fmt.Sprintf("%x", h.Sum(nil))[:5]
@@ -155,15 +155,15 @@ func (smr *SyncMapURLRepo) writeToDB(resultChan chan<- *resultIdTransfer, unShor
 			Value: unShortenURL,
 		})
 		if err != nil {
-			resultChan <- &resultIdTransfer{err: err}
+			resultChan <- &resultIDTransfer{err: err}
 			return
 		}
 	}
-	resultChan <- &resultIdTransfer{id: key}
+	resultChan <- &resultIDTransfer{id: key}
 }
-func (smr *SyncMapURLRepo) updateInDB(resultChan chan<- *resultIdTransfer, id string, u any) {
+func (smr *SyncMapURLRepo) updateInDB(resultChan chan<- *resultIDTransfer, id string, u any) {
 	smr.sMap.Store(id, u)
-	resultChan <- &resultIdTransfer{
+	resultChan <- &resultIDTransfer{
 		id: id,
 	}
 }

@@ -33,7 +33,7 @@ func (smr *SyncMapUserRepo) Read(ctx context.Context, id string) (any, error) {
 }
 
 func (smr *SyncMapUserRepo) Create(ctx context.Context, v any) (string, error) {
-	resultChan := make(chan *resultIdTransfer, 1)
+	resultChan := make(chan *resultIDTransfer, 1)
 	u, ok := v.([]*types.URLShorter)
 	if u != nil && !ok {
 		return "", TypeError(v)
@@ -48,7 +48,7 @@ func (smr *SyncMapUserRepo) Create(ctx context.Context, v any) (string, error) {
 }
 
 func (smr *SyncMapUserRepo) Update(ctx context.Context, id string, v any) error {
-	resultChan := make(chan *resultIdTransfer, 1)
+	resultChan := make(chan *resultIDTransfer, 1)
 	u, ok := v.([]*types.URLShorter)
 	if !ok {
 		return TypeError(v)
@@ -88,20 +88,20 @@ func (smr *SyncMapUserRepo) getFromDB(urlChan chan<- *valueTransfer, id string) 
 
 }
 
-func (smr *SyncMapUserRepo) writeToDB(resultChan chan<- *resultIdTransfer, v []*types.URLShorter) {
+func (smr *SyncMapUserRepo) writeToDB(resultChan chan<- *resultIDTransfer, v []*types.URLShorter) {
 	smr.m.Lock()
 	id := strconv.Itoa(smr.lastID)
 	smr.lastID++
 	smr.m.Unlock()
 	smr.sMap.Store(id, v)
 
-	resultChan <- &resultIdTransfer{
+	resultChan <- &resultIDTransfer{
 		id: id,
 	}
 }
-func (smr *SyncMapUserRepo) updateInDB(resultChan chan<- *resultIdTransfer, id string, u any) {
+func (smr *SyncMapUserRepo) updateInDB(resultChan chan<- *resultIDTransfer, id string, u any) {
 	smr.sMap.Store(id, u)
-	resultChan <- &resultIdTransfer{
+	resultChan <- &resultIDTransfer{
 		id: id,
 	}
 }
