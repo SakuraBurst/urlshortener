@@ -68,7 +68,7 @@ func (c *Controller) CreateUser(ctx context.Context) (string, error) {
 func (c *Controller) UpdateUser(ctx context.Context, userToken string, updateValue *types.URLShorter) error {
 	ctx, cancel := context.WithTimeout(ctx, time.Second*2)
 	defer cancel()
-	userId, err := token.GetIDFromToken(userToken)
+	userID, err := token.GetIDFromToken(userToken)
 	if err != nil {
 		return err
 	}
@@ -77,17 +77,17 @@ func (c *Controller) UpdateUser(ctx context.Context, userToken string, updateVal
 		return err
 	}
 	v = append(v, updateValue)
-	return c.userRep.Update(ctx, userId, v)
+	return c.userRep.Update(ctx, userID, v)
 }
 
 func (c *Controller) GetUser(ctx context.Context, userToken string) ([]*types.URLShorter, error) {
 	ctx, cancel := context.WithTimeout(ctx, time.Second*2)
 	defer cancel()
-	userId, err := token.GetIDFromToken(userToken)
+	userID, err := token.GetIDFromToken(userToken)
 	if err != nil {
 		return nil, err
 	}
-	v, err := c.userRep.Read(ctx, userId)
+	v, err := c.userRep.Read(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
