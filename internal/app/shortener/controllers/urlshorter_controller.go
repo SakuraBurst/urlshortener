@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"github.com/SakuraBurst/urlshortener/internal/app/shortener/repository"
 	"github.com/SakuraBurst/urlshortener/internal/app/shortener/token"
@@ -14,14 +15,16 @@ type Controller struct {
 	urlRep  repository.Repository
 	userRep repository.Repository
 	baseURL string
+	db      *sql.DB
 }
 
 var ErrNoBaseURL = errors.New("there is no base url")
 var ErrInvalidBaseURL = errors.New("invalid base url")
 
-func InitController(initBaseURL string, urlRep repository.Repository, userRep repository.Repository) *Controller {
+func InitController(initBaseURL, dbURL string, urlRep, userRep repository.Repository) *Controller {
 	checkBaseURL(initBaseURL)
-	return &Controller{baseURL: initBaseURL, urlRep: urlRep, userRep: userRep}
+	db, _ := sql.Open("pgx", dbURL)
+	return &Controller{baseURL: initBaseURL, urlRep: urlRep, userRep: userRep, db: db}
 }
 
 func (c *Controller) GetURLFromID(ctx context.Context, id string) (*url.URL, error) {
@@ -78,6 +81,13 @@ func (c *Controller) UpdateUser(ctx context.Context, userToken string, updateVal
 	}
 	v = append(v, updateValue)
 	return c.userRep.Update(ctx, userID, v)
+}
+
+func (c *Controller) PingDataBase() error {
+	if c.db == nil {
+		return errors.New("there is no db conn")
+	}
+	return c.db.Ping()
 }
 
 func (c *Controller) GetUser(ctx context.Context, userToken string) ([]*types.URLShorter, error) {

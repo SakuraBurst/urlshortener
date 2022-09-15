@@ -40,6 +40,7 @@ func InitAPI(controller *controllers.Controller) *gin.Engine {
 	engine.Use(router.authHandler)
 	engine.GET("/:hash", router.RedirectURL)
 	engine.POST("/", router.CreateShortenerURLRaw)
+	engine.GET("/ping", router.PingDataBase)
 	v1Api := engine.Group("/api")
 	{
 		v1Api.POST("/shorten", router.CreateShortenerURLJson)
@@ -126,6 +127,15 @@ func (r *router) CreateShortenerURLJson(c *gin.Context) {
 	}
 	resp := ShortenerResponse{Result: u}
 	c.JSON(http.StatusCreated, resp)
+}
+
+func (r *router) PingDataBase(c *gin.Context) {
+	err := r.controller.PingDataBase()
+	if err != nil {
+		c.AbortWithError(http.StatusInternalServerError, err)
+		return
+	}
+	c.Status(http.StatusOK)
 }
 
 func encodingHandler(c *gin.Context) {

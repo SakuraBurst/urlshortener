@@ -7,6 +7,7 @@ import (
 	"github.com/SakuraBurst/urlshortener/internal/app/shortener/router"
 	"github.com/SakuraBurst/urlshortener/internal/app/shortener/token"
 	"github.com/caarlos0/env/v6"
+	_ "github.com/jackc/pgx/v4/stdlib"
 	"log"
 )
 
@@ -15,6 +16,7 @@ type config struct {
 	BaseURL         string `env:"BASE_URL" envDefault:"http://localhost:8080/"`
 	FileStoragePath string `env:"FILE_STORAGE_PATH"`
 	SecretSignKey   string `env:"SECRET_KEY" envDefault:"secret key"`
+	DataBaseDsn     string `env:"DATABASE_DSN" envDefault:"postgres://postgres:password@localhost:5433"`
 }
 
 func main() {
@@ -26,6 +28,7 @@ func main() {
 	flag.StringVar(&cfg.BaseURL, "b", cfg.BaseURL, "Базовый урл сокращенной ссылки")
 	flag.StringVar(&cfg.FileStoragePath, "f", cfg.FileStoragePath, "Путь до бекап файла")
 	flag.StringVar(&cfg.SecretSignKey, "k", cfg.SecretSignKey, "Секретный ключ для создания подписи")
+	flag.StringVar(&cfg.DataBaseDsn, "d", cfg.DataBaseDsn, "Ссылка для подключения к базе данных")
 	flag.Parse()
 	urlRepo, err := repository.InitURLRepository(cfg.FileStoragePath)
 	if err != nil {
@@ -36,7 +39,7 @@ func main() {
 		log.Fatal(err)
 	}
 	token.SetSecretKey(cfg.SecretSignKey)
-	controller := controllers.InitController(cfg.BaseURL, urlRepo, userRepo)
+	controller := controllers.InitController(cfg.BaseURL, cfg.DataBaseDsn, urlRepo, userRepo)
 	r := router.InitAPI(controller)
 	log.Fatal(r.Run(cfg.ServerAddress))
 }
