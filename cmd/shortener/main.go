@@ -19,7 +19,7 @@ type config struct {
 	BaseURL         string `env:"BASE_URL" envDefault:"http://localhost:8080/"`
 	FileStoragePath string `env:"FILE_STORAGE_PATH"`
 	SecretSignKey   string `env:"SECRET_KEY" envDefault:"secret key"`
-	DataBaseDsn     string `env:"DATABASE_DSN" envDefault:""`
+	DataBaseDsn     string `env:"DATABASE_DSN"`
 }
 
 func main() {
