@@ -111,7 +111,7 @@ func TestCreateShortenerURLRaw(t *testing.T) {
 	userDB.On("Update", "1", []*types.URLShorter{{ShortURL: MockURLShorten, OriginalURL: MockURLRaw}}).Return(nil).Once()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			router := InitAPI(controllers.InitController(localhost, "", urlDB, userDB))
+			router := InitAPI(controllers.InitController(localhost, nil, urlDB, userDB))
 			router.ServeHTTP(tt.args.writer, tt.args.request)
 			result := tt.args.writer.Result()
 			assert.Equal(t, tt.want.contentType, result.Header.Get("content-type"))
@@ -186,7 +186,7 @@ func TestCreateShortenerURLJson(t *testing.T) {
 	userDB.On("Update", "1", []*types.URLShorter{{ShortURL: MockURLShorten, OriginalURL: MockURLRaw}}).Return(nil).Once()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			router := InitAPI(controllers.InitController(localhost, "", urlDB, userDB))
+			router := InitAPI(controllers.InitController(localhost, nil, urlDB, userDB))
 			router.ServeHTTP(tt.args.writer, tt.args.request)
 			result := tt.args.writer.Result()
 			assert.Equal(t, tt.want.contentType, result.Header.Get("content-type"))
@@ -258,7 +258,7 @@ func TestRedirectURL(t *testing.T) {
 	userDB.On("Create", []*types.URLShorter(nil)).Return("1", nil).Times(len(tests))
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			router := InitAPI(controllers.InitController(localhost, "", urlDB, userDB))
+			router := InitAPI(controllers.InitController(localhost, nil, urlDB, userDB))
 			router.ServeHTTP(tt.args.writer, tt.args.request)
 			result := tt.args.writer.Result()
 			result.Body.Close()
@@ -275,7 +275,7 @@ func TestRedirectURL(t *testing.T) {
 func TestNotFoundEndpoint(t *testing.T) {
 	DB := new(mockDataBase)
 	DB.On("Create", []*types.URLShorter(nil)).Return("1", nil).Once()
-	router := InitAPI(controllers.InitController(localhost, "", DB, DB))
+	router := InitAPI(controllers.InitController(localhost, nil, DB, DB))
 	request := createRequest(t, http.MethodPost, "/asdfalfkasdfkkjasdfasfasfasdfsaf", bytes.NewBuffer([]byte{0}))
 	writer := httptest.NewRecorder()
 	router.ServeHTTP(writer, request)
@@ -413,7 +413,7 @@ func Test_encodingHandler(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			router := InitAPI(controllers.InitController(localhost, "", urlDB, userDB))
+			router := InitAPI(controllers.InitController(localhost, nil, urlDB, userDB))
 			b := bytes.NewBuffer(nil)
 			if tt.args.request.needToEncode {
 				w := gzip.NewWriter(b)

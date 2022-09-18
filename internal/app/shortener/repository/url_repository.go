@@ -4,71 +4,58 @@ import (
 	"context"
 	"crypto/sha1"
 	"encoding/json"
-	"errors"
 	"fmt"
+	"github.com/jackc/pgx/v4"
 	"io"
-	"log"
 	"net/url"
-	"os"
 	"sync"
 )
+
+type DBURLRepo struct {
+	db *pgx.Conn
+}
+
+var errDuplicate = `ERROR: duplicate key value violates unique constraint "url_pkey" (SQLSTATE 23505)`
+
+func (d *DBURLRepo) Create(ctx context.Context, v any) (string, error) {
+	u, ok := v.(*url.URL)
+	if !ok {
+		return "", TypeError(v)
+	}
+	key, err := createURLHash(u)
+	if err != nil {
+		return "", err
+	}
+	_, err = d.db.Exec(ctx, "INSERT INTO url (shortenhash, unshortenurl) VALUES ($1, $2)", key, u.String())
+	if err != nil && err.Error() != errDuplicate {
+		return "", err
+	}
+	return key, nil
+}
+
+func (d *DBURLRepo) Read(ctx context.Context, id string) (any, error) {
+	r := d.db.QueryRow(ctx, "SELECT unshortenurl from url where shortenhash = $1", id)
+	s := ""
+	err := r.Scan(&s)
+	if err != nil {
+		return nil, err
+	}
+	return url.Parse(s)
+}
+
+func (d *DBURLRepo) Update(ctx context.Context, s string, v any) error {
+	u, ok := v.(*url.URL)
+	if !ok {
+		return TypeError(v)
+	}
+	_, err := d.db.Exec(ctx, "UPDATE url set unshortenurl = $1 where shortenhash = $2", u.String(), s)
+	return err
+}
 
 type SyncMapURLRepo struct {
 	sMap          sync.Map
 	m             sync.Mutex
 	backUpEncoder *json.Encoder
-}
-
-var ErrNoSuchValue = errors.New("there is no such value in repo")
-var ErrUnexpectedTypeInMap = errors.New("unexpected type in map")
-
-type Repository interface {
-	Create(context.Context, any) (string, error)
-	Read(context.Context, string) (any, error)
-	Update(context.Context, string, any) error
-}
-
-type valueTransfer struct {
-	value any
-	err   error
-}
-
-type backUpValue struct {
-	Key   string
-	Value *url.URL
-}
-
-type resultIDTransfer struct {
-	id  string
-	err error
-}
-
-func TypeError(v any) error {
-	return fmt.Errorf("repository dont support this type of value - %T", v)
-}
-
-func InitURLRepository(backUpPath string) (Repository, error) {
-	smr := new(SyncMapURLRepo)
-	if len(backUpPath) != 0 {
-		file, err := os.OpenFile(backUpPath, os.O_RDWR|os.O_APPEND|os.O_CREATE, os.ModePerm)
-		if err != nil {
-			log.Println(err)
-			return nil, err
-		}
-		decoder := json.NewDecoder(file)
-		backUpVal := backUpValue{}
-		var decoderError error
-		for decoderError = decoder.Decode(&backUpVal); decoderError == nil; decoderError = decoder.Decode(&backUpVal) {
-			smr.sMap.Store(backUpVal.Key, backUpVal.Value)
-			backUpVal = backUpValue{}
-		}
-		if errors.Is(err, io.EOF) {
-			log.Println(err)
-		}
-
-		smr.backUpEncoder = json.NewEncoder(file)
-	}
-	return smr, nil
 }
 
 func (smr *SyncMapURLRepo) Read(ctx context.Context, id string) (any, error) {
@@ -139,13 +126,11 @@ func (smr *SyncMapURLRepo) getFromDB(valueChan chan<- *valueTransfer, id string)
 }
 
 func (smr *SyncMapURLRepo) writeToDB(resultChan chan<- *resultIDTransfer, unShortenURL *url.URL) {
-	h := sha1.New()
-	_, err := io.WriteString(h, unShortenURL.String())
+	key, err := createURLHash(unShortenURL)
 	if err != nil {
 		resultChan <- &resultIDTransfer{err: err}
 		return
 	}
-	key := fmt.Sprintf("%x", h.Sum(nil))[:5]
 	_, ok := smr.sMap.LoadOrStore(key, unShortenURL)
 	if !ok && smr.backUpEncoder != nil {
 		smr.m.Lock()
@@ -166,4 +151,13 @@ func (smr *SyncMapURLRepo) updateInDB(resultChan chan<- *resultIDTransfer, id st
 	resultChan <- &resultIDTransfer{
 		id: id,
 	}
+}
+
+func createURLHash(u *url.URL) (string, error) {
+	h := sha1.New()
+	_, err := io.WriteString(h, u.String())
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%x", h.Sum(nil))[:5], nil
 }

@@ -1,14 +1,17 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"github.com/SakuraBurst/urlshortener/internal/app/shortener/controllers"
 	"github.com/SakuraBurst/urlshortener/internal/app/shortener/repository"
 	"github.com/SakuraBurst/urlshortener/internal/app/shortener/router"
 	"github.com/SakuraBurst/urlshortener/internal/app/shortener/token"
 	"github.com/caarlos0/env/v6"
+	"github.com/jackc/pgx/v4"
 	_ "github.com/jackc/pgx/v4/stdlib"
 	"log"
+	"time"
 )
 
 type config struct {
@@ -30,16 +33,27 @@ func main() {
 	flag.StringVar(&cfg.SecretSignKey, "k", cfg.SecretSignKey, "Секретный ключ для создания подписи")
 	flag.StringVar(&cfg.DataBaseDsn, "d", cfg.DataBaseDsn, "Ссылка для подключения к базе данных")
 	flag.Parse()
-	urlRepo, err := repository.InitURLRepository(cfg.FileStoragePath)
-	if err != nil {
-		log.Fatal(err)
+	var db *pgx.Conn
+	var err error
+	c, cancel := context.WithTimeout(context.Background(), time.Second*2)
+	defer cancel()
+	if len(cfg.DataBaseDsn) != 0 {
+		db, err = pgx.Connect(c, cfg.DataBaseDsn)
+		if err != nil {
+			log.Fatal(err)
+		}
+		err = db.Ping(c)
+		if err != nil {
+			log.Fatal(err)
+		}
 	}
-	userRepo, err := repository.InitUserRepository()
+
+	urlRepo, userRepo, err := repository.InitRepositories(c, cfg.FileStoragePath, db)
 	if err != nil {
 		log.Fatal(err)
 	}
 	token.SetSecretKey(cfg.SecretSignKey)
-	controller := controllers.InitController(cfg.BaseURL, cfg.DataBaseDsn, urlRepo, userRepo)
+	controller := controllers.InitController(cfg.BaseURL, db, urlRepo, userRepo)
 	r := router.InitAPI(controller)
 	log.Fatal(r.Run(cfg.ServerAddress))
 }

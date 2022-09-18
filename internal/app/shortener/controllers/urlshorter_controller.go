@@ -2,11 +2,12 @@ package controllers
 
 import (
 	"context"
-	"database/sql"
-	"errors"
+	"emperror.dev/errors"
 	"github.com/SakuraBurst/urlshortener/internal/app/shortener/repository"
 	"github.com/SakuraBurst/urlshortener/internal/app/shortener/token"
 	"github.com/SakuraBurst/urlshortener/internal/app/shortener/types"
+	"github.com/jackc/pgx/v4"
+	"golang.org/x/exp/slices"
 	"net/url"
 	"time"
 )
@@ -15,15 +16,14 @@ type Controller struct {
 	urlRep  repository.Repository
 	userRep repository.Repository
 	baseURL string
-	db      *sql.DB
+	db      *pgx.Conn
 }
 
 var ErrNoBaseURL = errors.New("there is no base url")
 var ErrInvalidBaseURL = errors.New("invalid base url")
 
-func InitController(initBaseURL, dbURL string, urlRep, userRep repository.Repository) *Controller {
+func InitController(initBaseURL string, db *pgx.Conn, urlRep, userRep repository.Repository) *Controller {
 	checkBaseURL(initBaseURL)
-	db, _ := sql.Open("pgx", dbURL)
 	return &Controller{baseURL: initBaseURL, urlRep: urlRep, userRep: userRep, db: db}
 }
 
@@ -50,17 +50,14 @@ func (c *Controller) WriteURL(ctx context.Context, unShortenURL *url.URL, userTo
 	}
 	host, _ := url.Parse(c.baseURL)
 	host.Path = id
-	err = c.UpdateUser(ctx, userToken, &types.URLShorter{
-		ShortURL:    host.String(),
-		OriginalURL: unShortenURL.String(),
-	})
+	err = c.UpdateUser(ctx, userToken, id)
 	return host.String(), err
 }
 
 func (c *Controller) CreateUser(ctx context.Context) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, time.Second*2)
 	defer cancel()
-	var initURLSlice []*types.URLShorter
+	var initURLSlice []string
 	id, err := c.userRep.Create(ctx, initURLSlice)
 	if err != nil {
 		return "", err
@@ -68,26 +65,33 @@ func (c *Controller) CreateUser(ctx context.Context) (string, error) {
 	return token.CreateToken(id)
 }
 
-func (c *Controller) UpdateUser(ctx context.Context, userToken string, updateValue *types.URLShorter) error {
+func (c *Controller) UpdateUser(ctx context.Context, userToken, urlID string) error {
 	ctx, cancel := context.WithTimeout(ctx, time.Second*2)
 	defer cancel()
 	userID, err := token.GetIDFromToken(userToken)
 	if err != nil {
 		return err
 	}
-	v, err := c.GetUser(ctx, userToken)
+	v, err := c.userRep.Read(ctx, userID)
 	if err != nil {
 		return err
 	}
-	v = append(v, updateValue)
-	return c.userRep.Update(ctx, userID, v)
+	u, ok := v.([]string)
+	if u != nil && !ok {
+		return repository.TypeError(u)
+	}
+	if slices.Contains(u, urlID) {
+		return nil
+	}
+	u = append(u, urlID)
+	return c.userRep.Update(ctx, userID, u)
 }
 
-func (c *Controller) PingDataBase() error {
+func (c *Controller) PingDataBase(ctx context.Context) error {
 	if c.db == nil {
 		return errors.New("there is no db conn")
 	}
-	return c.db.Ping()
+	return c.db.Ping(ctx)
 }
 
 func (c *Controller) GetUser(ctx context.Context, userToken string) ([]*types.URLShorter, error) {
@@ -101,11 +105,25 @@ func (c *Controller) GetUser(ctx context.Context, userToken string) ([]*types.UR
 	if err != nil {
 		return nil, err
 	}
-	u, ok := v.([]*types.URLShorter)
+	u, ok := v.([]string)
 	if u != nil && !ok {
 		return nil, repository.TypeError(u)
 	}
-	return u, nil
+	res := make([]*types.URLShorter, 0, len(u))
+	for _, id := range u {
+		host, _ := url.Parse(c.baseURL)
+		host.Path = id
+		r, err := c.GetURLFromID(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+		res = append(res, &types.URLShorter{
+			ShortURL:    host.String(),
+			OriginalURL: r.String(),
+		})
+
+	}
+	return res, nil
 }
 
 func checkBaseURL(baseURL string) {

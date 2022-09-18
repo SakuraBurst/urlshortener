@@ -2,8 +2,8 @@ package router
 
 import (
 	"compress/gzip"
+	"emperror.dev/errors"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"github.com/SakuraBurst/urlshortener/internal/app/shortener/controllers"
 	"github.com/SakuraBurst/urlshortener/internal/app/shortener/token"
@@ -130,7 +130,7 @@ func (r *router) CreateShortenerURLJson(c *gin.Context) {
 }
 
 func (r *router) PingDataBase(c *gin.Context) {
-	err := r.controller.PingDataBase()
+	err := r.controller.PingDataBase(c)
 	if err != nil {
 		c.AbortWithError(http.StatusInternalServerError, err)
 		return
@@ -168,6 +168,7 @@ func encodingHandler(c *gin.Context) {
 func (r *router) authHandler(c *gin.Context) {
 	t, err := c.Cookie("auth")
 	if err != nil || !token.IsTokenValid(t) {
+		fmt.Println("is token valid")
 		t, err = r.controller.CreateUser(c)
 		if err != nil {
 			c.AbortWithError(http.StatusInternalServerError, err)
