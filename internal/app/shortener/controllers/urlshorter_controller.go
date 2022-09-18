@@ -3,6 +3,7 @@ package controllers
 import (
 	"context"
 	"emperror.dev/errors"
+	"fmt"
 	"github.com/SakuraBurst/urlshortener/internal/app/shortener/repository"
 	"github.com/SakuraBurst/urlshortener/internal/app/shortener/token"
 	"github.com/SakuraBurst/urlshortener/internal/app/shortener/types"
@@ -58,6 +59,7 @@ func (c *Controller) CreateUser(ctx context.Context) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, time.Second*2)
 	defer cancel()
 	var initURLSlice []string
+	fmt.Println("dd")
 	id, err := c.userRep.Create(ctx, initURLSlice)
 	if err != nil {
 		return "", err

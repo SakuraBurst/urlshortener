@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"github.com/SakuraBurst/urlshortener/internal/app/shortener/controllers"
 	"github.com/SakuraBurst/urlshortener/internal/app/shortener/repository"
-	"github.com/SakuraBurst/urlshortener/internal/app/shortener/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -47,7 +46,9 @@ func (r *mockDataBase) Update(ctx context.Context, id string, val any) error {
 
 var MockURLRaw = "https://test.com/"
 
-var MockURLShorten = localhost + "/1"
+var hashURL = "1"
+
+var MockURLShorten = localhost + "/" + hashURL
 
 var MockURL, _ = url.Parse(MockURLRaw)
 
@@ -106,9 +107,9 @@ func TestCreateShortenerURLRaw(t *testing.T) {
 	urlDB := new(mockDataBase)
 	userDB := new(mockDataBase)
 	urlDB.On("Create", MockURL).Return("1", nil).Once()
-	userDB.On("Create", []*types.URLShorter(nil)).Return("1", nil).Times(len(tests))
-	userDB.On("Read", "1").Return([]*types.URLShorter(nil), nil).Once()
-	userDB.On("Update", "1", []*types.URLShorter{{ShortURL: MockURLShorten, OriginalURL: MockURLRaw}}).Return(nil).Once()
+	userDB.On("Create", []string(nil)).Return("1", nil).Times(len(tests))
+	userDB.On("Read", "1").Return([]string(nil), nil).Once()
+	userDB.On("Update", "1", []string{hashURL}).Return(nil).Once()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			router := InitAPI(controllers.InitController(localhost, nil, urlDB, userDB))
@@ -181,9 +182,9 @@ func TestCreateShortenerURLJson(t *testing.T) {
 	urlDB := new(mockDataBase)
 	userDB := new(mockDataBase)
 	urlDB.On("Create", MockURL).Return("1", nil).Once()
-	userDB.On("Create", []*types.URLShorter(nil)).Return("1", nil).Times(len(tests))
-	userDB.On("Read", "1").Return([]*types.URLShorter(nil), nil).Once()
-	userDB.On("Update", "1", []*types.URLShorter{{ShortURL: MockURLShorten, OriginalURL: MockURLRaw}}).Return(nil).Once()
+	userDB.On("Create", []string(nil)).Return("1", nil).Times(len(tests))
+	userDB.On("Read", "1").Return([]string(nil), nil).Once()
+	userDB.On("Update", "1", []string{hashURL}).Return(nil).Once()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			router := InitAPI(controllers.InitController(localhost, nil, urlDB, userDB))
@@ -255,7 +256,7 @@ func TestRedirectURL(t *testing.T) {
 	userDB := new(mockDataBase)
 	urlDB.On("Read", "1").Return(MockURL, nil).Once()
 	urlDB.On("Read", "2").Return(nil, repository.ErrNoSuchValue).Once()
-	userDB.On("Create", []*types.URLShorter(nil)).Return("1", nil).Times(len(tests))
+	userDB.On("Create", []string(nil)).Return("1", nil).Times(len(tests))
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			router := InitAPI(controllers.InitController(localhost, nil, urlDB, userDB))
@@ -274,7 +275,7 @@ func TestRedirectURL(t *testing.T) {
 
 func TestNotFoundEndpoint(t *testing.T) {
 	DB := new(mockDataBase)
-	DB.On("Create", []*types.URLShorter(nil)).Return("1", nil).Once()
+	DB.On("Create", []string(nil)).Return("1", nil).Once()
 	router := InitAPI(controllers.InitController(localhost, nil, DB, DB))
 	request := createRequest(t, http.MethodPost, "/asdfalfkasdfkkjasdfasfasfasdfsaf", bytes.NewBuffer([]byte{0}))
 	writer := httptest.NewRecorder()
@@ -407,9 +408,9 @@ func Test_encodingHandler(t *testing.T) {
 	urlDB := new(mockDataBase)
 	userDB := new(mockDataBase)
 	urlDB.On("Create", MockURL).Return("1", nil).Twice()
-	userDB.On("Create", []*types.URLShorter(nil)).Return("1", nil).Times(len(tests) - 1)
-	userDB.On("Read", "1").Return([]*types.URLShorter(nil), nil).Twice()
-	userDB.On("Update", "1", []*types.URLShorter{{ShortURL: MockURLShorten, OriginalURL: MockURLRaw}}).Return(nil).Twice()
+	userDB.On("Create", []string(nil)).Return("1", nil).Times(len(tests) - 1)
+	userDB.On("Read", "1").Return([]string(nil), nil).Twice()
+	userDB.On("Update", "1", []string{hashURL}).Return(nil).Twice()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
