@@ -43,7 +43,12 @@ func InitAPI(controller *controllers.Controller) *gin.Engine {
 	engine.GET("/ping", router.PingDataBase)
 	v1Api := engine.Group("/api")
 	{
-		v1Api.POST("/shorten", router.CreateShortenerURLJson)
+		shortenGroup := v1Api.Group("/shorten")
+		{
+			shortenGroup.POST("/", router.CreateShortenerURLJson)
+			shortenGroup.POST("/batch", router.CreateArrayOfShortenerURLJson)
+		}
+
 		userGroup := v1Api.Group("/user")
 		{
 			userGroup.GET("/urls", router.GetUserURLS)
@@ -58,6 +63,16 @@ type ShortenerRequest struct {
 
 type ShortenerResponse struct {
 	Result string `json:"result"`
+}
+
+type ShortenerRequestWithId struct {
+	CorrelationId string `json:"correlation_id"`
+	OriginalURL   string `json:"original_url"`
+}
+
+type ShortenerResponseWithId struct {
+	CorrelationId string `json:"correlation_id"`
+	ShortURL      string `json:"short_url"`
 }
 
 func (r *router) RedirectURL(c *gin.Context) {
@@ -126,6 +141,36 @@ func (r *router) CreateShortenerURLJson(c *gin.Context) {
 		return
 	}
 	resp := ShortenerResponse{Result: u}
+	c.JSON(http.StatusCreated, resp)
+}
+
+func (r *router) CreateArrayOfShortenerURLJson(c *gin.Context) {
+	var req []ShortenerRequestWithId
+	if err := c.BindJSON(&req); err != nil {
+		return
+	}
+	u := make([]*url.URL, 0, len(req))
+	for _, v := range req {
+		unShortenURL, err := url.Parse(v.OriginalURL)
+		if err != nil {
+			c.AbortWithError(http.StatusBadRequest, err)
+			return
+		}
+		u = append(u, unShortenURL)
+	}
+
+	res, err := r.controller.WriteArrayOfURL(c, u, c.GetHeader("auth"))
+	if err != nil {
+		c.AbortWithError(http.StatusInternalServerError, err)
+		return
+	}
+	resp := make([]ShortenerResponseWithId, 0, len(res))
+	for i, re := range res {
+		resp = append(resp, ShortenerResponseWithId{
+			CorrelationId: req[i].CorrelationId,
+			ShortURL:      re,
+		})
+	}
 	c.JSON(http.StatusCreated, resp)
 }
 

@@ -4,7 +4,7 @@ go 1.18
 
 require (
 	emperror.dev/errors v0.8.1
-	github.com/caarlos0/env/v6 v6.10.0
+	github.com/caarlos0/env/v6 v6.10.1
 	github.com/gin-gonic/gin v1.8.1
 	github.com/jackc/pgx/v4 v4.17.2
 	github.com/stretchr/testify v1.8.0

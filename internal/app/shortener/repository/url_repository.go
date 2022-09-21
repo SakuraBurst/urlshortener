@@ -5,17 +5,18 @@ import (
 	"crypto/sha1"
 	"encoding/json"
 	"fmt"
+	"github.com/jackc/pgconn"
 	"github.com/jackc/pgx/v4"
 	"io"
+	"log"
 	"net/url"
 	"sync"
 )
 
 type DBURLRepo struct {
-	db *pgx.Conn
+	db         *pgx.Conn
+	insertStmt *pgconn.StatementDescription
 }
-
-var errDuplicate = `ERROR: duplicate key value violates unique constraint "url_pkey" (SQLSTATE 23505)`
 
 func (d *DBURLRepo) Create(ctx context.Context, v any) (string, error) {
 	u, ok := v.(*url.URL)
@@ -26,11 +27,42 @@ func (d *DBURLRepo) Create(ctx context.Context, v any) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	_, err = d.db.Exec(ctx, "INSERT INTO url (shortenhash, unshortenurl) VALUES ($1, $2)", key, u.String())
-	if err != nil && err.Error() != errDuplicate {
+	_, err = d.db.Exec(ctx, d.insertStmt.SQL, key, u.String())
+	if err != nil {
 		return "", err
 	}
 	return key, nil
+}
+
+func (d *DBURLRepo) CreateArray(ctx context.Context, v any) ([]string, error) {
+	urls, ok := v.([]*url.URL)
+	if !ok {
+		return nil, TypeError(v)
+	}
+	tx, err := d.db.BeginTx(ctx, pgx.TxOptions{})
+	defer func() {
+		err := tx.Rollback(ctx)
+		if err != nil {
+			log.Println(err)
+		}
+	}()
+	stmt, err := tx.Prepare(ctx, "inset url tx", d.insertStmt.SQL)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]string, 0, len(urls))
+	for _, u := range urls {
+		key, err := createURLHash(u)
+		if err != nil {
+			return nil, err
+		}
+		_, err = tx.Exec(ctx, stmt.SQL, key, u.String())
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, key)
+	}
+	return result, tx.Commit(ctx)
 }
 
 func (d *DBURLRepo) Read(ctx context.Context, id string) (any, error) {
@@ -76,13 +108,37 @@ func (smr *SyncMapURLRepo) Create(ctx context.Context, v any) (string, error) {
 	if !ok {
 		return "", TypeError(v)
 	}
-	go smr.writeToDB(resultChan, u)
+	go smr.writeToDB(resultChan, u, 0)
 	select {
 	case res := <-resultChan:
 		return res.id, res.err
 	case <-ctx.Done():
 		return "", ctx.Err()
 	}
+}
+
+func (smr *SyncMapURLRepo) CreateArray(ctx context.Context, v any) ([]string, error) {
+	urls, ok := v.([]*url.URL)
+	if !ok {
+		return nil, TypeError(v)
+	}
+	resultChan := make(chan *resultIDTransfer, len(urls))
+	for i, u := range urls {
+		go smr.writeToDB(resultChan, u, i)
+	}
+	result := make([]string, len(urls))
+	for range result {
+		select {
+		case res := <-resultChan:
+			if res.err != nil {
+				return nil, res.err
+			}
+			result[res.index] = res.id
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	}
+	return result, nil
 }
 
 func (smr *SyncMapURLRepo) Update(ctx context.Context, id string, v any) error {
@@ -125,7 +181,7 @@ func (smr *SyncMapURLRepo) getFromDB(valueChan chan<- *valueTransfer, id string)
 
 }
 
-func (smr *SyncMapURLRepo) writeToDB(resultChan chan<- *resultIDTransfer, unShortenURL *url.URL) {
+func (smr *SyncMapURLRepo) writeToDB(resultChan chan<- *resultIDTransfer, unShortenURL *url.URL, index int) {
 	key, err := createURLHash(unShortenURL)
 	if err != nil {
 		resultChan <- &resultIDTransfer{err: err}
@@ -144,7 +200,7 @@ func (smr *SyncMapURLRepo) writeToDB(resultChan chan<- *resultIDTransfer, unShor
 			return
 		}
 	}
-	resultChan <- &resultIDTransfer{id: key}
+	resultChan <- &resultIDTransfer{id: key, index: index}
 }
 func (smr *SyncMapURLRepo) updateInDB(resultChan chan<- *resultIDTransfer, id string, u any) {
 	smr.sMap.Store(id, u)

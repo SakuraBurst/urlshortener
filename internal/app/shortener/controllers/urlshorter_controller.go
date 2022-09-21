@@ -49,10 +49,33 @@ func (c *Controller) WriteURL(ctx context.Context, unShortenURL *url.URL, userTo
 	if err != nil {
 		return "", err
 	}
-	host, _ := url.Parse(c.baseURL)
+	host, err := url.Parse(c.baseURL)
+	if err != nil {
+		return "", err
+	}
 	host.Path = id
 	err = c.UpdateUser(ctx, userToken, id)
 	return host.String(), err
+}
+
+func (c *Controller) WriteArrayOfURL(ctx context.Context, unShortenURLs []*url.URL, userToken string) ([]string, error) {
+	ctx, cancel := context.WithTimeout(ctx, time.Second*2)
+	defer cancel()
+	ids, err := c.urlRep.CreateArray(ctx, unShortenURLs)
+	if err != nil {
+		return nil, err
+	}
+	host, err := url.Parse(c.baseURL)
+	if err != nil {
+		return nil, err
+	}
+	urls := make([]string, 0, len(ids))
+	for _, id := range ids {
+		host.Path = id
+		urls = append(urls, host.String())
+	}
+	err = c.UpdateUser(ctx, userToken, ids...)
+	return urls, err
 }
 
 func (c *Controller) CreateUser(ctx context.Context) (string, error) {
@@ -67,7 +90,7 @@ func (c *Controller) CreateUser(ctx context.Context) (string, error) {
 	return token.CreateToken(id)
 }
 
-func (c *Controller) UpdateUser(ctx context.Context, userToken, urlID string) error {
+func (c *Controller) UpdateUser(ctx context.Context, userToken string, urlIDs ...string) error {
 	ctx, cancel := context.WithTimeout(ctx, time.Second*2)
 	defer cancel()
 	userID, err := token.GetIDFromToken(userToken)
@@ -82,10 +105,12 @@ func (c *Controller) UpdateUser(ctx context.Context, userToken, urlID string) er
 	if u != nil && !ok {
 		return repository.TypeError(u)
 	}
-	if slices.Contains(u, urlID) {
-		return nil
+	for _, id := range urlIDs {
+		if slices.Contains(u, id) {
+			continue
+		}
+		u = append(u, id)
 	}
-	u = append(u, urlID)
 	return c.userRep.Update(ctx, userID, u)
 }
 

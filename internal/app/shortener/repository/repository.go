@@ -17,6 +17,7 @@ var ErrUnexpectedTypeInMap = errors.New("unexpected type in map")
 
 type Repository interface {
 	Create(context.Context, any) (string, error)
+	CreateArray(context.Context, any) ([]string, error)
 	Read(context.Context, string) (any, error)
 	Update(context.Context, string, any) error
 }
@@ -32,8 +33,9 @@ type backUpValue struct {
 }
 
 type resultIDTransfer struct {
-	id  string
-	err error
+	id    string
+	index int
+	err   error
 }
 
 func TypeError(v any) error {
@@ -54,7 +56,11 @@ func initUserRepository(c context.Context, db *pgx.Conn) (Repository, error) {
 				return nil, err
 			}
 		}
-		return &DBUserRepo{db: db}, nil
+		stmt, err := db.Prepare(c, "insert user", `INSERT INTO users (urls) values ($1) RETURNING id`)
+		if err != nil {
+			return nil, err
+		}
+		return &DBUserRepo{db: db, insertStmt: stmt}, nil
 	}
 	smr := &SyncMapUserRepo{lastID: 1}
 	return smr, nil
@@ -74,7 +80,11 @@ func initURLRepository(c context.Context, backUpPath string, db *pgx.Conn) (Repo
 				return nil, err
 			}
 		}
-		return &DBURLRepo{db: db}, nil
+		stmt, err := db.Prepare(c, "insert url", "INSERT INTO url (shortenhash, unshortenurl) VALUES ($1, $2) ON CONFLICT DO NOTHING")
+		if err != nil {
+			return nil, err
+		}
+		return &DBURLRepo{db: db, insertStmt: stmt}, nil
 	}
 	smr := new(SyncMapURLRepo)
 	if len(backUpPath) != 0 {

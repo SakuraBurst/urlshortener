@@ -2,8 +2,11 @@ package repository
 
 import (
 	"context"
+	"emperror.dev/errors"
 	"fmt"
+	"github.com/jackc/pgconn"
 	"github.com/jackc/pgx/v4"
+	"log"
 	"strconv"
 
 	"sync"
@@ -16,7 +19,8 @@ type SyncMapUserRepo struct {
 }
 
 type DBUserRepo struct {
-	db *pgx.Conn
+	db         *pgx.Conn
+	insertStmt *pgconn.StatementDescription
 }
 
 func (d *DBUserRepo) Create(ctx context.Context, v any) (string, error) {
@@ -24,13 +28,42 @@ func (d *DBUserRepo) Create(ctx context.Context, v any) (string, error) {
 	if u != nil && !ok {
 		return "", TypeError(v)
 	}
-	res := d.db.QueryRow(ctx, "INSERT INTO users (urls) values ($1) RETURNING id", u)
+	res := d.db.QueryRow(ctx, d.insertStmt.SQL, u)
 	id := 0
 	err := res.Scan(&id)
 	if err != nil {
 		return "", err
 	}
 	return strconv.Itoa(id), nil
+}
+
+func (d *DBUserRepo) CreateArray(ctx context.Context, v any) ([]string, error) {
+	usersURLs, ok := v.([][]string)
+	if !ok {
+		return nil, TypeError(v)
+	}
+	tx, err := d.db.BeginTx(ctx, pgx.TxOptions{})
+	defer func() {
+		err := tx.Rollback(ctx)
+		if err != nil {
+			log.Println(err)
+		}
+	}()
+	stmt, err := tx.Prepare(ctx, "inset user tx", d.insertStmt.SQL)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]string, 0, len(usersURLs))
+	for _, userURLs := range usersURLs {
+		row := tx.QueryRow(ctx, stmt.SQL, userURLs)
+		id := 0
+		err := row.Scan(&id)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, strconv.Itoa(id))
+	}
+	return result, tx.Commit(ctx)
 }
 
 func (d *DBUserRepo) Read(ctx context.Context, s string) (any, error) {
@@ -77,6 +110,30 @@ func (smr *SyncMapUserRepo) Create(ctx context.Context, v any) (string, error) {
 	case <-ctx.Done():
 		return "", ctx.Err()
 	}
+}
+
+func (smr *SyncMapUserRepo) CreateArray(ctx context.Context, v any) ([]string, error) {
+	usersURLs, ok := v.([][]string)
+	if !ok {
+		return nil, TypeError(v)
+	}
+	resultChan := make(chan *resultIDTransfer, len(usersURLs))
+	for _, u := range usersURLs {
+		go smr.writeToDB(resultChan, u)
+	}
+	result := make([]string, len(usersURLs))
+	for i := range result {
+		select {
+		case res := <-resultChan:
+			if res.err != nil {
+				return nil, res.err
+			}
+			result[i] = res.id
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	}
+	return nil, errors.New("unexpected error")
 }
 
 func (smr *SyncMapUserRepo) Update(ctx context.Context, id string, v any) error {
