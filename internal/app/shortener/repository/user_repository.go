@@ -43,6 +43,9 @@ func (d *DBUserRepo) CreateArray(ctx context.Context, v any) ([]string, error) {
 		return nil, TypeError(v)
 	}
 	tx, err := d.db.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return nil, err
+	}
 	defer func() {
 		err := tx.Rollback(ctx)
 		if err != nil {
