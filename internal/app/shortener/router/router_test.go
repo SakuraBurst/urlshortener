@@ -39,6 +39,10 @@ func (r *mockDataBase) Create(ctx context.Context, val any) (string, error) {
 	return args.String(0), args.Error(1)
 }
 
+func (r *mockDataBase) CreateArray(ctx context.Context, val any) ([]string, error) {
+	panic("not implemented")
+}
+
 func (r *mockDataBase) Update(ctx context.Context, id string, val any) error {
 	args := r.Called(id, val)
 	return args.Error(0)

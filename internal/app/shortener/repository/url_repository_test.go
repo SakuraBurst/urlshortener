@@ -162,7 +162,6 @@ func TestMapBd_WriteToBd(t *testing.T) {
 				require.True(t, ok)
 				require.Equal(t, tt.args.u, u)
 			}
-
 			if !tt.positiveTest {
 				assert.Error(t, err)
 				assert.ErrorIs(t, err, tt.want.err)
@@ -254,7 +253,6 @@ func TestMapBd_getFromBd(t *testing.T) {
 				assert.Error(t, got.err)
 				assert.ErrorIs(t, got.err, tt.want.err)
 			}
-
 		})
 	}
 }
@@ -291,24 +289,21 @@ func TestMapBd_writeToBd(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			m := tt.preset.Map
-			go m.writeToDB(tt.args.resultChan, tt.args.u)
+			go m.writeToDB(tt.args.resultChan, tt.args.u, 0)
 			got := <-tt.args.resultChan
 			if tt.positiveTest {
 				require.NoError(t, got.err)
 			}
 			assert.Equal(t, tt.want.id, got.id)
-
 			if tt.positiveTest {
 				u, ok := m.sMap.Load(got.id)
 				require.True(t, ok)
 				require.Equal(t, tt.args.u, u)
 			}
-
 			if !tt.positiveTest {
 				assert.Error(t, got.err)
 				assert.ErrorIs(t, got.err, tt.want.err)
 			}
-
 		})
 	}
 }

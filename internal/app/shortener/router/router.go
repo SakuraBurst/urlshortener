@@ -45,7 +45,7 @@ func InitAPI(controller *controllers.Controller) *gin.Engine {
 	{
 		shortenGroup := v1Api.Group("/shorten")
 		{
-			shortenGroup.POST("/", router.CreateShortenerURLJson)
+			shortenGroup.POST("", router.CreateShortenerURLJson)
 			shortenGroup.POST("/batch", router.CreateArrayOfShortenerURLJson)
 		}
 
