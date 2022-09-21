@@ -65,13 +65,13 @@ type ShortenerResponse struct {
 	Result string `json:"result"`
 }
 
-type ShortenerRequestWithId struct {
-	CorrelationId string `json:"correlation_id"`
+type ShortenerRequestWithID struct {
+	CorrelationID string `json:"correlation_id"`
 	OriginalURL   string `json:"original_url"`
 }
 
-type ShortenerResponseWithId struct {
-	CorrelationId string `json:"correlation_id"`
+type ShortenerResponseWithID struct {
+	CorrelationID string `json:"correlation_id"`
 	ShortURL      string `json:"short_url"`
 }
 
@@ -145,7 +145,7 @@ func (r *router) CreateShortenerURLJson(c *gin.Context) {
 }
 
 func (r *router) CreateArrayOfShortenerURLJson(c *gin.Context) {
-	var req []ShortenerRequestWithId
+	var req []ShortenerRequestWithID
 	if err := c.BindJSON(&req); err != nil {
 		return
 	}
@@ -164,10 +164,10 @@ func (r *router) CreateArrayOfShortenerURLJson(c *gin.Context) {
 		c.AbortWithError(http.StatusInternalServerError, err)
 		return
 	}
-	resp := make([]ShortenerResponseWithId, 0, len(res))
+	resp := make([]ShortenerResponseWithID, 0, len(res))
 	for i, re := range res {
-		resp = append(resp, ShortenerResponseWithId{
-			CorrelationId: req[i].CorrelationId,
+		resp = append(resp, ShortenerResponseWithID{
+			CorrelationID: req[i].CorrelationID,
 			ShortURL:      re,
 		})
 	}
