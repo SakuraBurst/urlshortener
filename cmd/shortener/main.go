@@ -20,7 +20,7 @@ type config struct {
 	FileStoragePath string `env:"FILE_STORAGE_PATH"`
 	SecretSignKey   string `env:"SECRET_KEY" envDefault:"secret key"`
 	// envDefault:"postgres://postgres:password@localhost:5433/postgres"
-	DataBaseDsn string `env:"DATABASE_DSN" envDefault:"postgres://postgres:password@localhost:5433/postgres"`
+	DataBaseDsn string `env:"DATABASE_DSN"`
 }
 
 func main() {
