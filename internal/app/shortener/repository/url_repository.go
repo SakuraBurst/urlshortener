@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha1"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/jackc/pgconn"
 	"github.com/jackc/pgx/v4"
@@ -27,11 +28,16 @@ func (d *DBURLRepo) Create(ctx context.Context, v any) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	_, err = d.db.Exec(ctx, d.insertStmt.SQL, key, u.String())
-	if err != nil {
+	r := d.db.QueryRow(ctx, d.insertStmt.SQL, key, u.String())
+	hash := ""
+	err = r.Scan(&hash)
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return "", err
 	}
-	return key, nil
+	if errors.Is(err, pgx.ErrNoRows) {
+		return key, ErrDuplicate
+	}
+	return key, err
 }
 
 func (d *DBURLRepo) CreateArray(ctx context.Context, v any) ([]string, error) {
@@ -54,18 +60,30 @@ func (d *DBURLRepo) CreateArray(ctx context.Context, v any) ([]string, error) {
 		return nil, err
 	}
 	result := make([]string, 0, len(urls))
+	isDuplicate := false
 	for _, u := range urls {
 		key, err := createURLHash(u)
 		if err != nil {
 			return nil, err
 		}
-		_, err = tx.Exec(ctx, stmt.SQL, key, u.String())
-		if err != nil {
+		r := tx.QueryRow(ctx, stmt.SQL, key, u.String())
+		hash := ""
+		err = r.Scan(&hash)
+		if errors.Is(err, pgx.ErrNoRows) {
+			isDuplicate = true
+		}
+		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 			return nil, err
 		}
 		result = append(result, key)
 	}
-	return result, tx.Commit(ctx)
+	if err = tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+	if isDuplicate {
+		return result, ErrDuplicate
+	}
+	return result, err
 }
 
 func (d *DBURLRepo) Read(ctx context.Context, id string) (any, error) {
@@ -100,7 +118,6 @@ func (smr *SyncMapURLRepo) Read(ctx context.Context, id string) (any, error) {
 	case urlTransfer := <-valueChan:
 		return urlTransfer.value, urlTransfer.err
 	case <-ctx.Done():
-		fmt.Println(ctx, ctx.Err())
 		return nil, ctx.Err()
 	}
 }

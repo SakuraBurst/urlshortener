@@ -101,9 +101,13 @@ func (r *router) CreateShortenerURLRaw(c *gin.Context) {
 		c.AbortWithError(http.StatusBadRequest, err)
 		return
 	}
-	u, err := r.controller.WriteURL(c, unShortenURL, c.GetHeader("auth"))
+	u, hasConflicts, err := r.controller.WriteURL(c, unShortenURL, c.GetHeader("auth"))
 	if err != nil {
 		c.AbortWithError(http.StatusInternalServerError, err)
+		return
+	}
+	if hasConflicts {
+		c.String(http.StatusConflict, u)
 		return
 	}
 	c.String(http.StatusCreated, u)
@@ -135,12 +139,16 @@ func (r *router) CreateShortenerURLJson(c *gin.Context) {
 		c.AbortWithError(http.StatusBadRequest, err)
 		return
 	}
-	u, err := r.controller.WriteURL(c, unShortenURL, c.GetHeader("auth"))
+	u, hasConflicts, err := r.controller.WriteURL(c, unShortenURL, c.GetHeader("auth"))
 	if err != nil {
 		c.AbortWithError(http.StatusInternalServerError, err)
 		return
 	}
 	resp := ShortenerResponse{Result: u}
+	if hasConflicts {
+		c.JSON(http.StatusConflict, resp)
+		return
+	}
 	c.JSON(http.StatusCreated, resp)
 }
 
@@ -159,7 +167,7 @@ func (r *router) CreateArrayOfShortenerURLJson(c *gin.Context) {
 		u = append(u, unShortenURL)
 	}
 
-	res, err := r.controller.WriteArrayOfURL(c, u, c.GetHeader("auth"))
+	res, hasConflicts, err := r.controller.WriteArrayOfURL(c, u, c.GetHeader("auth"))
 	if err != nil {
 		c.AbortWithError(http.StatusInternalServerError, err)
 		return
@@ -170,6 +178,10 @@ func (r *router) CreateArrayOfShortenerURLJson(c *gin.Context) {
 			CorrelationID: req[i].CorrelationID,
 			ShortURL:      re,
 		})
+	}
+	if hasConflicts {
+		c.JSON(http.StatusConflict, resp)
+		return
 	}
 	c.JSON(http.StatusCreated, resp)
 }
@@ -213,7 +225,6 @@ func encodingHandler(c *gin.Context) {
 func (r *router) authHandler(c *gin.Context) {
 	t, err := c.Cookie("auth")
 	if err != nil || !token.IsTokenValid(t) {
-		fmt.Println("is token valid")
 		t, err = r.controller.CreateUser(c)
 		if err != nil {
 			c.AbortWithError(http.StatusInternalServerError, err)

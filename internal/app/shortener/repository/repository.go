@@ -14,6 +14,7 @@ import (
 
 var ErrNoSuchValue = errors.New("there is no such value in repo")
 var ErrUnexpectedTypeInMap = errors.New("unexpected type in map")
+var ErrDuplicate = errors.New("there is duplicate in data")
 
 type Repository interface {
 	Create(context.Context, any) (string, error)
@@ -80,7 +81,7 @@ func initURLRepository(c context.Context, backUpPath string, db *pgx.Conn) (Repo
 				return nil, err
 			}
 		}
-		stmt, err := db.Prepare(c, "insert url", "INSERT INTO url (shortenhash, unshortenurl) VALUES ($1, $2) ON CONFLICT DO NOTHING")
+		stmt, err := db.Prepare(c, "insert url", "INSERT INTO url (shortenhash, unshortenurl) VALUES ($1, $2) on conflict do nothing RETURNING shortenHash")
 		if err != nil {
 			return nil, err
 		}

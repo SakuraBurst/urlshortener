@@ -3,7 +3,6 @@ package repository
 import (
 	"context"
 	"emperror.dev/errors"
-	"fmt"
 	"github.com/jackc/pgconn"
 	"github.com/jackc/pgx/v4"
 	"log"
@@ -95,7 +94,6 @@ func (smr *SyncMapUserRepo) Read(ctx context.Context, id string) (any, error) {
 	case urlTransfer := <-valueChan:
 		return urlTransfer.value, urlTransfer.err
 	case <-ctx.Done():
-		fmt.Println(ctx, ctx.Err())
 		return nil, ctx.Err()
 	}
 }
@@ -158,7 +156,6 @@ func (smr *SyncMapUserRepo) getFromDB(urlChan chan<- *valueTransfer, id string) 
 	var err error
 	sliceOfURL, ok := smr.sMap.Load(id)
 	if !ok {
-		fmt.Println(id)
 		urlChan <- &valueTransfer{
 			value: nil,
 			err:   ErrNoSuchValue,

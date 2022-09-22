@@ -3,7 +3,6 @@ package controllers
 import (
 	"context"
 	"emperror.dev/errors"
-	"fmt"
 	"github.com/SakuraBurst/urlshortener/internal/app/shortener/repository"
 	"github.com/SakuraBurst/urlshortener/internal/app/shortener/token"
 	"github.com/SakuraBurst/urlshortener/internal/app/shortener/types"
@@ -42,47 +41,54 @@ func (c *Controller) GetURLFromID(ctx context.Context, id string) (*url.URL, err
 	return u, nil
 }
 
-func (c *Controller) WriteURL(ctx context.Context, unShortenURL *url.URL, userToken string) (string, error) {
+func (c *Controller) WriteURL(ctx context.Context, unShortenURL *url.URL, userToken string) (string, bool, error) {
 	ctx, cancel := context.WithTimeout(ctx, time.Second*2)
 	defer cancel()
 	id, err := c.urlRep.Create(ctx, unShortenURL)
+	hasConflicts := false
 	if err != nil {
-		return "", err
+		if errors.Is(err, repository.ErrDuplicate) {
+			hasConflicts = true
+		} else {
+			return "", false, err
+		}
 	}
 	host, err := url.Parse(c.baseURL)
 	if err != nil {
-		return "", err
+		return "", false, err
 	}
 	host.Path = id
-	err = c.UpdateUser(ctx, userToken, id)
-	return host.String(), err
+	return host.String(), hasConflicts, c.UpdateUser(ctx, userToken, id)
 }
 
-func (c *Controller) WriteArrayOfURL(ctx context.Context, unShortenURLs []*url.URL, userToken string) ([]string, error) {
+func (c *Controller) WriteArrayOfURL(ctx context.Context, unShortenURLs []*url.URL, userToken string) ([]string, bool, error) {
 	ctx, cancel := context.WithTimeout(ctx, time.Second*2)
 	defer cancel()
 	ids, err := c.urlRep.CreateArray(ctx, unShortenURLs)
+	hasConflicts := false
 	if err != nil {
-		return nil, err
+		if errors.Is(err, repository.ErrDuplicate) {
+			hasConflicts = true
+		} else {
+			return nil, false, err
+		}
 	}
 	host, err := url.Parse(c.baseURL)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	urls := make([]string, 0, len(ids))
 	for _, id := range ids {
 		host.Path = id
 		urls = append(urls, host.String())
 	}
-	err = c.UpdateUser(ctx, userToken, ids...)
-	return urls, err
+	return urls, hasConflicts, c.UpdateUser(ctx, userToken, ids...)
 }
 
 func (c *Controller) CreateUser(ctx context.Context) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, time.Second*2)
 	defer cancel()
 	var initURLSlice []string
-	fmt.Println("dd")
 	id, err := c.userRep.Create(ctx, initURLSlice)
 	if err != nil {
 		return "", err
