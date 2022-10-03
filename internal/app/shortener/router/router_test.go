@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"github.com/SakuraBurst/urlshortener/internal/app/shortener/controllers"
 	"github.com/SakuraBurst/urlshortener/internal/app/shortener/repository"
+	"github.com/SakuraBurst/urlshortener/internal/app/shortener/token"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -114,9 +115,11 @@ func TestCreateShortenerURLRaw(t *testing.T) {
 	userDB.On("Create", []string(nil)).Return("1", nil).Times(len(tests))
 	userDB.On("Read", "1").Return([]string(nil), nil).Once()
 	userDB.On("Update", "1", []string{hashURL}).Return(nil).Once()
+	tb := token.InitTokenBuilder("secret key")
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			router := InitAPI(controllers.InitController(localhost, nil, urlDB, userDB))
+
+			router := InitAPI(controllers.InitController(localhost, nil, tb, urlDB, userDB), tb)
 			router.ServeHTTP(tt.args.writer, tt.args.request)
 			result := tt.args.writer.Result()
 			assert.Equal(t, tt.want.contentType, result.Header.Get("content-type"))
@@ -189,9 +192,10 @@ func TestCreateShortenerURLJson(t *testing.T) {
 	userDB.On("Create", []string(nil)).Return("1", nil).Times(len(tests))
 	userDB.On("Read", "1").Return([]string(nil), nil).Once()
 	userDB.On("Update", "1", []string{hashURL}).Return(nil).Once()
+	tb := token.InitTokenBuilder("secret key")
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			router := InitAPI(controllers.InitController(localhost, nil, urlDB, userDB))
+			router := InitAPI(controllers.InitController(localhost, nil, tb, urlDB, userDB), tb)
 			router.ServeHTTP(tt.args.writer, tt.args.request)
 			result := tt.args.writer.Result()
 			assert.Equal(t, tt.want.contentType, result.Header.Get("content-type"))
@@ -261,9 +265,10 @@ func TestRedirectURL(t *testing.T) {
 	urlDB.On("Read", "1").Return(MockURL, nil).Once()
 	urlDB.On("Read", "2").Return(nil, repository.ErrNoSuchValue).Once()
 	userDB.On("Create", []string(nil)).Return("1", nil).Times(len(tests))
+	tb := token.InitTokenBuilder("secret key")
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			router := InitAPI(controllers.InitController(localhost, nil, urlDB, userDB))
+			router := InitAPI(controllers.InitController(localhost, nil, tb, urlDB, userDB), tb)
 			router.ServeHTTP(tt.args.writer, tt.args.request)
 			result := tt.args.writer.Result()
 			result.Body.Close()
@@ -280,7 +285,8 @@ func TestRedirectURL(t *testing.T) {
 func TestNotFoundEndpoint(t *testing.T) {
 	DB := new(mockDataBase)
 	DB.On("Create", []string(nil)).Return("1", nil).Once()
-	router := InitAPI(controllers.InitController(localhost, nil, DB, DB))
+	tb := token.InitTokenBuilder("secret key")
+	router := InitAPI(controllers.InitController(localhost, nil, tb, DB, DB), tb)
 	request := createRequest(t, http.MethodPost, "/asdfalfkasdfkkjasdfasfasfasdfsaf", bytes.NewBuffer([]byte{0}))
 	writer := httptest.NewRecorder()
 	router.ServeHTTP(writer, request)
@@ -415,10 +421,10 @@ func Test_encodingHandler(t *testing.T) {
 	userDB.On("Create", []string(nil)).Return("1", nil).Times(len(tests) - 1)
 	userDB.On("Read", "1").Return([]string(nil), nil).Twice()
 	userDB.On("Update", "1", []string{hashURL}).Return(nil).Twice()
-
+	tb := token.InitTokenBuilder("secret key")
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			router := InitAPI(controllers.InitController(localhost, nil, urlDB, userDB))
+			router := InitAPI(controllers.InitController(localhost, nil, tb, urlDB, userDB), tb)
 			b := bytes.NewBuffer(nil)
 			if tt.args.request.needToEncode {
 				w := gzip.NewWriter(b)

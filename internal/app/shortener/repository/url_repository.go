@@ -11,12 +11,56 @@ import (
 	"io"
 	"log"
 	"net/url"
+	"os"
 	"sync"
 )
 
 type DBURLRepo struct {
 	db         *pgx.Conn
 	insertStmt *pgconn.StatementDescription
+}
+
+func initURLRepository(c context.Context, backUpPath string, db *pgx.Conn) (Repository, error) {
+	if db != nil {
+		r := db.QueryRow(c, "SELECT EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename  = 'url')")
+		var isExist bool
+		err := r.Scan(&isExist)
+		if err != nil {
+			return nil, err
+		}
+		if !isExist {
+			_, err := db.Exec(c, "create table url (shortenHash text primary key, unShortenURL text)")
+			if err != nil {
+				return nil, err
+			}
+		}
+		stmt, err := db.Prepare(c, "insert url", "INSERT INTO url (shortenhash, unshortenurl) VALUES ($1, $2) on conflict do nothing RETURNING shortenHash")
+		if err != nil {
+			return nil, err
+		}
+		return &DBURLRepo{db: db, insertStmt: stmt}, nil
+	}
+	smr := new(SyncMapURLRepo)
+	if len(backUpPath) != 0 {
+		file, err := os.OpenFile(backUpPath, os.O_RDWR|os.O_APPEND|os.O_CREATE, os.ModePerm)
+		if err != nil {
+			log.Println(err)
+			return nil, err
+		}
+		decoder := json.NewDecoder(file)
+		backUpVal := backUpValue{}
+		var decoderError error
+		for decoderError = decoder.Decode(&backUpVal); decoderError == nil; decoderError = decoder.Decode(&backUpVal) {
+			smr.sMap.Store(backUpVal.Key, backUpVal.Value)
+			backUpVal = backUpValue{}
+		}
+		if errors.Is(err, io.EOF) {
+			log.Println(err)
+		}
+
+		smr.backUpEncoder = json.NewEncoder(file)
+	}
+	return smr, nil
 }
 
 func (d *DBURLRepo) Create(ctx context.Context, v any) (string, error) {

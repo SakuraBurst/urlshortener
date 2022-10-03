@@ -8,32 +8,34 @@ import (
 	"strconv"
 )
 
-var secretKey = []byte("secret key")
-
-func SetSecretKey(key string) {
-	secretKey = []byte(key)
+type TokenBuilder struct {
+	secretKey []byte
 }
 
-func CreateToken(id string) (string, error) {
+func InitTokenBuilder(key string) *TokenBuilder {
+	return &TokenBuilder{secretKey: []byte(key)}
+}
+
+func (tb *TokenBuilder) CreateToken(id string) (string, error) {
 	uintID, err := strconv.ParseUint(id, 10, 64)
 	if err != nil {
 		return "", err
 	}
 	binaryID := make([]byte, binary.MaxVarintLen64)
 	binary.BigEndian.PutUint64(binaryID, uintID)
-	t := append(binaryID, createHash(binaryID)...)
+	t := append(binaryID, tb.createHash(binaryID)...)
 	return hex.EncodeToString(t), nil
 }
 
-func IsTokenValid(token string) bool {
+func (tb *TokenBuilder) IsTokenValid(token string) bool {
 	hash, err := hex.DecodeString(token)
 	if err != nil {
 		return false
 	}
-	return hmac.Equal(hash[binary.MaxVarintLen64:], createHash(hash[:binary.MaxVarintLen64]))
+	return hmac.Equal(hash[binary.MaxVarintLen64:], tb.createHash(hash[:binary.MaxVarintLen64]))
 }
 
-func GetIDFromToken(token string) (string, error) {
+func (tb *TokenBuilder) GetIDFromToken(token string) (string, error) {
 	hash, err := hex.DecodeString(token)
 	if err != nil {
 		return "", err
@@ -41,8 +43,8 @@ func GetIDFromToken(token string) (string, error) {
 	return strconv.FormatUint(binary.BigEndian.Uint64(hash[:binary.MaxVarintLen64]), 10), nil
 }
 
-func createHash(v []byte) []byte {
-	h := hmac.New(sha256.New, secretKey)
+func (tb *TokenBuilder) createHash(v []byte) []byte {
+	h := hmac.New(sha256.New, tb.secretKey)
 	h.Write(v)
 	return h.Sum(nil)
 }

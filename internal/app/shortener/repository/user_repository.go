@@ -22,6 +22,30 @@ type DBUserRepo struct {
 	insertStmt *pgconn.StatementDescription
 }
 
+func initUserRepository(c context.Context, db *pgx.Conn) (Repository, error) {
+	if db != nil {
+		r := db.QueryRow(c, "SELECT EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename  = 'users')")
+		var isExist bool
+		err := r.Scan(&isExist)
+		if err != nil {
+			return nil, err
+		}
+		if !isExist {
+			_, err = db.Exec(c, "create table users (id serial primary key , urls text [])")
+			if err != nil {
+				return nil, err
+			}
+		}
+		stmt, err := db.Prepare(c, "insert user", `INSERT INTO users (urls) values ($1) RETURNING id`)
+		if err != nil {
+			return nil, err
+		}
+		return &DBUserRepo{db: db, insertStmt: stmt}, nil
+	}
+	smr := &SyncMapUserRepo{lastID: 1}
+	return smr, nil
+}
+
 func (d *DBUserRepo) Create(ctx context.Context, v any) (string, error) {
 	u, ok := v.([]string)
 	if u != nil && !ok {

@@ -16,7 +16,8 @@ import (
 )
 
 type router struct {
-	controller *controllers.Controller
+	controller   *controllers.Controller
+	tokenBuilder *token.TokenBuilder
 }
 
 type encodeResponseWriter struct {
@@ -32,8 +33,8 @@ func (w encodeResponseWriter) WriteString(s string) (n int, err error) {
 	return w.Writer.Write([]byte(s))
 }
 
-func InitAPI(controller *controllers.Controller) *gin.Engine {
-	router := &router{controller: controller}
+func InitAPI(controller *controllers.Controller, tb *token.TokenBuilder) *gin.Engine {
+	router := &router{controller: controller, tokenBuilder: tb}
 	engine := gin.Default()
 	engine.Use(errorHandler)
 	engine.Use(encodingHandler)
@@ -224,7 +225,7 @@ func encodingHandler(c *gin.Context) {
 
 func (r *router) authHandler(c *gin.Context) {
 	t, err := c.Cookie("auth")
-	if err != nil || !token.IsTokenValid(t) {
+	if err != nil || !r.tokenBuilder.IsTokenValid(t) {
 		t, err = r.controller.CreateUser(c)
 		if err != nil {
 			c.AbortWithError(http.StatusInternalServerError, err)

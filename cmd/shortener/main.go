@@ -48,13 +48,12 @@ func main() {
 			log.Fatal(err)
 		}
 	}
-
 	urlRepo, userRepo, err := repository.InitRepositories(c, cfg.FileStoragePath, db)
 	if err != nil {
 		log.Fatal(err)
 	}
-	token.SetSecretKey(cfg.SecretSignKey)
-	controller := controllers.InitController(cfg.BaseURL, db, urlRepo, userRepo)
-	r := router.InitAPI(controller)
+	tb := token.InitTokenBuilder(cfg.SecretSignKey)
+	controller := controllers.InitController(cfg.BaseURL, db, tb, urlRepo, userRepo)
+	r := router.InitAPI(controller, tb)
 	log.Fatal(r.Run(cfg.ServerAddress))
 }

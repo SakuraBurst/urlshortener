@@ -8,23 +8,25 @@ import (
 	"github.com/SakuraBurst/urlshortener/internal/app/shortener/types"
 	"github.com/jackc/pgx/v4"
 	"golang.org/x/exp/slices"
+	"log"
 	"net/url"
 	"time"
 )
 
 type Controller struct {
-	urlRep  repository.Repository
-	userRep repository.Repository
-	baseURL string
-	db      *pgx.Conn
+	urlRep       repository.Repository
+	userRep      repository.Repository
+	baseURL      string
+	db           *pgx.Conn
+	tokenBuilder *token.TokenBuilder
 }
 
 var ErrNoBaseURL = errors.New("there is no base url")
 var ErrInvalidBaseURL = errors.New("invalid base url")
 
-func InitController(initBaseURL string, db *pgx.Conn, urlRep, userRep repository.Repository) *Controller {
+func InitController(initBaseURL string, db *pgx.Conn, tb *token.TokenBuilder, urlRep, userRep repository.Repository) *Controller {
 	checkBaseURL(initBaseURL)
-	return &Controller{baseURL: initBaseURL, urlRep: urlRep, userRep: userRep, db: db}
+	return &Controller{baseURL: initBaseURL, urlRep: urlRep, userRep: userRep, db: db, tokenBuilder: tb}
 }
 
 func (c *Controller) GetURLFromID(ctx context.Context, id string) (*url.URL, error) {
@@ -55,7 +57,7 @@ func (c *Controller) WriteURL(ctx context.Context, unShortenURL *url.URL, userTo
 	}
 	host, err := url.Parse(c.baseURL)
 	if err != nil {
-		return "", false, err
+		log.Fatal("unexpected base url parse error")
 	}
 	host.Path = id
 	return host.String(), hasConflicts, c.UpdateUser(ctx, userToken, id)
@@ -93,13 +95,13 @@ func (c *Controller) CreateUser(ctx context.Context) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return token.CreateToken(id)
+	return c.tokenBuilder.CreateToken(id)
 }
 
 func (c *Controller) UpdateUser(ctx context.Context, userToken string, urlIDs ...string) error {
 	ctx, cancel := context.WithTimeout(ctx, time.Second*2)
 	defer cancel()
-	userID, err := token.GetIDFromToken(userToken)
+	userID, err := c.tokenBuilder.GetIDFromToken(userToken)
 	if err != nil {
 		return err
 	}
@@ -130,7 +132,7 @@ func (c *Controller) PingDataBase(ctx context.Context) error {
 func (c *Controller) GetUser(ctx context.Context, userToken string) ([]*types.URLShorter, error) {
 	ctx, cancel := context.WithTimeout(ctx, time.Second*2)
 	defer cancel()
-	userID, err := token.GetIDFromToken(userToken)
+	userID, err := c.tokenBuilder.GetIDFromToken(userToken)
 	if err != nil {
 		return nil, err
 	}
