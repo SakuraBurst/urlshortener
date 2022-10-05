@@ -19,7 +19,7 @@ func TestMapBd_ReadFromBd(t *testing.T) {
 		value *url.URL
 	}
 	type preset struct {
-		Map    *SyncMapRepo
+		Map    *SyncMapURLRepo
 		fields []field
 	}
 	type args struct {
@@ -30,44 +30,44 @@ func TestMapBd_ReadFromBd(t *testing.T) {
 		name         string
 		preset       preset
 		args         args
-		want         *URLTransfer
+		want         *valueTransfer
 		positiveTest bool
 	}{
 		{
 			name: "Positive test",
 			preset: preset{
-				Map:    &SyncMapRepo{},
+				Map:    &SyncMapURLRepo{},
 				fields: []field{{key: "1", value: UnShorterURL}},
 			},
 			args: args{
 				ctx: context.Background(),
 				id:  "1",
 			},
-			want: &URLTransfer{
-				UnShorterURL: UnShorterURL,
-				Err:          nil,
+			want: &valueTransfer{
+				value: UnShorterURL,
+				err:   nil,
 			},
 			positiveTest: true,
 		},
 		{
 			name: "Not found test",
 			preset: preset{
-				Map:    &SyncMapRepo{},
+				Map:    &SyncMapURLRepo{},
 				fields: []field{},
 			},
 			args: args{
 				ctx: context.Background(),
 				id:  "1",
 			},
-			want: &URLTransfer{
-				UnShorterURL: nil,
-				Err:          ErrNoSuchURL,
+			want: &valueTransfer{
+				value: nil,
+				err:   ErrNoSuchValue,
 			},
 		},
 		{
 			name: "Context canceled test",
 			preset: preset{
-				Map:    &SyncMapRepo{},
+				Map:    &SyncMapURLRepo{},
 				fields: []field{},
 			},
 			args: args{
@@ -78,9 +78,9 @@ func TestMapBd_ReadFromBd(t *testing.T) {
 				}(),
 				id: "1",
 			},
-			want: &URLTransfer{
-				UnShorterURL: nil,
-				Err:          context.Canceled,
+			want: &valueTransfer{
+				value: nil,
+				err:   context.Canceled,
 			},
 		},
 	}
@@ -94,11 +94,11 @@ func TestMapBd_ReadFromBd(t *testing.T) {
 			if tt.positiveTest {
 				require.NoError(t, err)
 			}
-			assert.Equal(t, tt.want.UnShorterURL, res)
+			assert.Equal(t, tt.want.value, res)
 
 			if !tt.positiveTest {
 				assert.Error(t, err)
-				assert.ErrorIs(t, err, tt.want.Err)
+				assert.ErrorIs(t, err, tt.want.err)
 			}
 		})
 	}
@@ -106,7 +106,7 @@ func TestMapBd_ReadFromBd(t *testing.T) {
 
 func TestMapBd_WriteToBd(t *testing.T) {
 	type preset struct {
-		Map *SyncMapRepo
+		Map *SyncMapURLRepo
 	}
 	type args struct {
 		ctx context.Context
@@ -116,25 +116,25 @@ func TestMapBd_WriteToBd(t *testing.T) {
 		name         string
 		preset       preset
 		args         args
-		want         *ResultTransfer
+		want         *resultIDTransfer
 		positiveTest bool
 	}{
 		{
 			name:   "Positive test",
-			preset: preset{Map: &SyncMapRepo{}},
+			preset: preset{Map: &SyncMapURLRepo{}},
 			args: args{
 				ctx: context.Background(),
 				u:   UnShorterURL,
 			},
-			want: &ResultTransfer{
-				ID:  "50334",
-				Err: nil,
+			want: &resultIDTransfer{
+				id:  "50334",
+				err: nil,
 			},
 			positiveTest: true,
 		},
 		{
 			name:   "Context cancel test",
-			preset: preset{Map: &SyncMapRepo{}},
+			preset: preset{Map: &SyncMapURLRepo{}},
 			args: args{
 				ctx: func() context.Context {
 					ctx, cancel := context.WithCancel(context.Background())
@@ -143,29 +143,28 @@ func TestMapBd_WriteToBd(t *testing.T) {
 				}(),
 				u: UnShorterURL,
 			},
-			want: &ResultTransfer{
-				ID:  "",
-				Err: context.Canceled,
+			want: &resultIDTransfer{
+				id:  "",
+				err: context.Canceled,
 			},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			m := tt.preset.Map
-			res, err := m.Write(tt.args.ctx, tt.args.u)
+			res, err := m.Create(tt.args.ctx, tt.args.u)
 			if tt.positiveTest {
 				require.NoError(t, err)
 			}
-			assert.Equal(t, tt.want.ID, res)
+			assert.Equal(t, tt.want.id, res)
 			if tt.positiveTest {
 				u, ok := m.sMap.Load(res)
 				require.True(t, ok)
 				require.Equal(t, tt.args.u, u)
 			}
-
 			if !tt.positiveTest {
 				assert.Error(t, err)
-				assert.ErrorIs(t, err, tt.want.Err)
+				assert.ErrorIs(t, err, tt.want.err)
 			}
 		})
 	}
@@ -177,63 +176,63 @@ func TestMapBd_getFromBd(t *testing.T) {
 		value any
 	}
 	type preset struct {
-		Map    *SyncMapRepo
+		Map    *SyncMapURLRepo
 		fields []field
 	}
 	type args struct {
-		urlChan chan *URLTransfer
+		urlChan chan *valueTransfer
 		id      string
 	}
 	tests := []struct {
 		name         string
 		preset       preset
 		args         args
-		want         *URLTransfer
+		want         *valueTransfer
 		positiveTest bool
 	}{
 		{
 			name: "Positive test",
 			preset: preset{
-				Map:    &SyncMapRepo{},
+				Map:    &SyncMapURLRepo{},
 				fields: []field{{key: "1", value: UnShorterURL}},
 			},
 			args: args{
-				urlChan: make(chan *URLTransfer),
+				urlChan: make(chan *valueTransfer),
 				id:      "1",
 			},
 			positiveTest: true,
-			want: &URLTransfer{
-				UnShorterURL: UnShorterURL,
-				Err:          nil,
+			want: &valueTransfer{
+				value: UnShorterURL,
+				err:   nil,
 			},
 		},
 		{
 			name: "No url test",
 			preset: preset{
-				Map: &SyncMapRepo{},
+				Map: &SyncMapURLRepo{},
 			},
 			args: args{
-				urlChan: make(chan *URLTransfer),
+				urlChan: make(chan *valueTransfer),
 				id:      "1",
 			},
-			want: &URLTransfer{
-				UnShorterURL: nil,
-				Err:          ErrNoSuchURL,
+			want: &valueTransfer{
+				value: nil,
+				err:   ErrNoSuchValue,
 			},
 		},
 		{
 			name: "Unexpected type in map",
 			preset: preset{
-				Map:    &SyncMapRepo{},
+				Map:    &SyncMapURLRepo{},
 				fields: []field{{key: "1", value: nil}},
 			},
 			args: args{
-				urlChan: make(chan *URLTransfer),
+				urlChan: make(chan *valueTransfer),
 				id:      "1",
 			},
-			want: &URLTransfer{
-				UnShorterURL: nil,
-				Err:          ErrUnexpectedTypeInMap,
+			want: &valueTransfer{
+				value: nil,
+				err:   ErrUnexpectedTypeInMap,
 			},
 		},
 	}
@@ -246,44 +245,43 @@ func TestMapBd_getFromBd(t *testing.T) {
 			go m.getFromDB(tt.args.urlChan, tt.args.id)
 			got := <-tt.args.urlChan
 			if tt.positiveTest {
-				require.NoError(t, got.Err)
+				require.NoError(t, got.err)
 			}
-			assert.Equal(t, tt.want.UnShorterURL, got.UnShorterURL)
+			assert.Equal(t, tt.want.value, got.value)
 
 			if !tt.positiveTest {
-				assert.Error(t, got.Err)
-				assert.ErrorIs(t, got.Err, tt.want.Err)
+				assert.Error(t, got.err)
+				assert.ErrorIs(t, got.err, tt.want.err)
 			}
-
 		})
 	}
 }
 
 func TestMapBd_writeToBd(t *testing.T) {
 	type preset struct {
-		Map *SyncMapRepo
+		Map *SyncMapURLRepo
 	}
 	type args struct {
-		resultChan chan *ResultTransfer
+		resultChan chan *resultIDTransfer
 		u          *url.URL
 	}
 	tests := []struct {
 		name         string
 		preset       preset
 		args         args
-		want         *ResultTransfer
+		want         *resultIDTransfer
 		positiveTest bool
 	}{
 		{
 			name:   "Positive test",
-			preset: preset{Map: &SyncMapRepo{}},
+			preset: preset{Map: &SyncMapURLRepo{}},
 			args: args{
-				resultChan: make(chan *ResultTransfer),
+				resultChan: make(chan *resultIDTransfer),
 				u:          UnShorterURL,
 			},
-			want: &ResultTransfer{
-				ID:  "50334",
-				Err: nil,
+			want: &resultIDTransfer{
+				id:  "50334",
+				err: nil,
 			},
 			positiveTest: true,
 		},
@@ -291,24 +289,21 @@ func TestMapBd_writeToBd(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			m := tt.preset.Map
-			go m.writeToDB(tt.args.resultChan, tt.args.u)
+			go m.writeToDB(tt.args.resultChan, tt.args.u, 0)
 			got := <-tt.args.resultChan
 			if tt.positiveTest {
-				require.NoError(t, got.Err)
+				require.NoError(t, got.err)
 			}
-			assert.Equal(t, tt.want.ID, got.ID)
-
+			assert.Equal(t, tt.want.id, got.id)
 			if tt.positiveTest {
-				u, ok := m.sMap.Load(got.ID)
+				u, ok := m.sMap.Load(got.id)
 				require.True(t, ok)
 				require.Equal(t, tt.args.u, u)
 			}
-
 			if !tt.positiveTest {
-				assert.Error(t, got.Err)
-				assert.ErrorIs(t, got.Err, tt.want.Err)
+				assert.Error(t, got.err)
+				assert.ErrorIs(t, got.err, tt.want.err)
 			}
-
 		})
 	}
 }

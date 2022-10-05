@@ -2,24 +2,23 @@ package router
 
 import (
 	"compress/gzip"
+	"emperror.dev/errors"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"github.com/SakuraBurst/urlshortener/internal/app/shortener/controllers"
+	"github.com/SakuraBurst/urlshortener/internal/app/shortener/token"
 	"github.com/gin-gonic/gin"
 	"io"
 	"log"
 	"net/http"
 	"net/url"
+	"time"
 )
 
 type router struct {
-	baseURL    string
-	controller *controllers.Controller
+	controller   *controllers.Controller
+	tokenBuilder *token.TokenBuilder
 }
-
-var ErrNoBaseURL = errors.New("there is no base url")
-var ErrInvalidBaseURL = errors.New("invalid base url")
 
 type encodeResponseWriter struct {
 	gin.ResponseWriter
@@ -27,7 +26,6 @@ type encodeResponseWriter struct {
 }
 
 func (w encodeResponseWriter) Write(p []byte) (n int, err error) {
-	fmt.Println(string(p))
 	return w.Writer.Write(p)
 }
 
@@ -35,28 +33,29 @@ func (w encodeResponseWriter) WriteString(s string) (n int, err error) {
 	return w.Writer.Write([]byte(s))
 }
 
-func InitAPI(initBaseURL string, controller *controllers.Controller) *gin.Engine {
-	checkBaseURL(initBaseURL)
-	router := &router{baseURL: initBaseURL, controller: controller}
+func InitAPI(controller *controllers.Controller, tb *token.TokenBuilder) *gin.Engine {
+	router := &router{controller: controller, tokenBuilder: tb}
 	engine := gin.Default()
 	engine.Use(errorHandler)
 	engine.Use(encodingHandler)
+	engine.Use(router.authHandler)
 	engine.GET("/:hash", router.RedirectURL)
 	engine.POST("/", router.CreateShortenerURLRaw)
+	engine.GET("/ping", router.PingDataBase)
 	v1Api := engine.Group("/api")
 	{
-		v1Api.POST("/shorten", router.CreateShortenerURLJson)
+		shortenGroup := v1Api.Group("/shorten")
+		{
+			shortenGroup.POST("", router.CreateShortenerURLJson)
+			shortenGroup.POST("/batch", router.CreateArrayOfShortenerURLJson)
+		}
+
+		userGroup := v1Api.Group("/user")
+		{
+			userGroup.GET("/urls", router.GetUserURLS)
+		}
 	}
 	return engine
-}
-
-func checkBaseURL(baseURL string) {
-	if len(baseURL) == 0 {
-		panic(ErrNoBaseURL)
-	}
-	if _, err := url.Parse(baseURL); err != nil {
-		panic(ErrInvalidBaseURL)
-	}
 }
 
 type ShortenerRequest struct {
@@ -65,6 +64,16 @@ type ShortenerRequest struct {
 
 type ShortenerResponse struct {
 	Result string `json:"result"`
+}
+
+type ShortenerRequestWithID struct {
+	CorrelationID string `json:"correlation_id"`
+	OriginalURL   string `json:"original_url"`
+}
+
+type ShortenerResponseWithID struct {
+	CorrelationID string `json:"correlation_id"`
+	ShortURL      string `json:"short_url"`
 }
 
 func (r *router) RedirectURL(c *gin.Context) {
@@ -93,14 +102,29 @@ func (r *router) CreateShortenerURLRaw(c *gin.Context) {
 		c.AbortWithError(http.StatusBadRequest, err)
 		return
 	}
-	id, err := r.controller.WriteURL(c, unShortenURL)
+	u, hasConflicts, err := r.controller.WriteURL(c, unShortenURL, c.GetHeader("auth"))
 	if err != nil {
 		c.AbortWithError(http.StatusInternalServerError, err)
 		return
 	}
-	host, _ := url.Parse(r.baseURL)
-	host.Path = id
-	c.String(http.StatusCreated, host.String())
+	if hasConflicts {
+		c.String(http.StatusConflict, u)
+		return
+	}
+	c.String(http.StatusCreated, u)
+}
+
+func (r *router) GetUserURLS(c *gin.Context) {
+	u, err := r.controller.GetUser(c, c.GetHeader("auth"))
+	if err != nil {
+		c.AbortWithError(http.StatusInternalServerError, err)
+		return
+	}
+	if len(u) == 0 {
+		c.AbortWithStatus(http.StatusNoContent)
+		return
+	}
+	c.JSON(http.StatusOK, u)
 }
 
 func (r *router) CreateShortenerURLJson(c *gin.Context) {
@@ -116,15 +140,60 @@ func (r *router) CreateShortenerURLJson(c *gin.Context) {
 		c.AbortWithError(http.StatusBadRequest, err)
 		return
 	}
-	id, err := r.controller.WriteURL(c, unShortenURL)
+	u, hasConflicts, err := r.controller.WriteURL(c, unShortenURL, c.GetHeader("auth"))
 	if err != nil {
 		c.AbortWithError(http.StatusInternalServerError, err)
 		return
 	}
-	host, _ := url.Parse(r.baseURL)
-	host.Path = id
-	resp := ShortenerResponse{Result: host.String()}
+	resp := ShortenerResponse{Result: u}
+	if hasConflicts {
+		c.JSON(http.StatusConflict, resp)
+		return
+	}
 	c.JSON(http.StatusCreated, resp)
+}
+
+func (r *router) CreateArrayOfShortenerURLJson(c *gin.Context) {
+	var req []ShortenerRequestWithID
+	if err := c.BindJSON(&req); err != nil {
+		return
+	}
+	u := make([]*url.URL, 0, len(req))
+	for _, v := range req {
+		unShortenURL, err := url.Parse(v.OriginalURL)
+		if err != nil {
+			c.AbortWithError(http.StatusBadRequest, err)
+			return
+		}
+		u = append(u, unShortenURL)
+	}
+
+	res, hasConflicts, err := r.controller.WriteArrayOfURL(c, u, c.GetHeader("auth"))
+	if err != nil {
+		c.AbortWithError(http.StatusInternalServerError, err)
+		return
+	}
+	resp := make([]ShortenerResponseWithID, 0, len(res))
+	for i, re := range res {
+		resp = append(resp, ShortenerResponseWithID{
+			CorrelationID: req[i].CorrelationID,
+			ShortURL:      re,
+		})
+	}
+	if hasConflicts {
+		c.JSON(http.StatusConflict, resp)
+		return
+	}
+	c.JSON(http.StatusCreated, resp)
+}
+
+func (r *router) PingDataBase(c *gin.Context) {
+	err := r.controller.PingDataBase(c)
+	if err != nil {
+		c.AbortWithError(http.StatusInternalServerError, err)
+		return
+	}
+	c.Status(http.StatusOK)
 }
 
 func encodingHandler(c *gin.Context) {
@@ -154,9 +223,25 @@ func encodingHandler(c *gin.Context) {
 	c.Next()
 }
 
+func (r *router) authHandler(c *gin.Context) {
+	t, err := c.Cookie("auth")
+	if err != nil || !r.tokenBuilder.IsTokenValid(t) {
+		t, err = r.controller.CreateUser(c)
+		if err != nil {
+			c.AbortWithError(http.StatusInternalServerError, err)
+			return
+		}
+		c.SetCookie("auth", t, time.Now().Add(time.Hour*24).Nanosecond(), "", "", false, true)
+	}
+	c.Request.Header.Set("auth", t)
+	c.Next()
+}
+
 func errorHandler(c *gin.Context) {
 	c.Next()
+	fmt.Println("____________________________________________________________________________")
 	for _, e := range c.Errors {
 		log.Println(e)
 	}
+	fmt.Println("____________________________________________________________________________")
 }
