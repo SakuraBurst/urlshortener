@@ -110,6 +110,9 @@ func (d *DBUserRepo) Update(ctx context.Context, s string, v any) error {
 	_, err := d.db.Exec(ctx, "UPDATE users set urls = $1 where id = $2", u, s)
 	return err
 }
+func (d *DBUserRepo) Delete(ctx context.Context, s string) error {
+	panic("unsupported behavior")
+}
 
 func (smr *SyncMapUserRepo) Read(ctx context.Context, id string) (any, error) {
 	valueChan := make(chan *valueTransfer, 1)
@@ -174,6 +177,10 @@ func (smr *SyncMapUserRepo) Update(ctx context.Context, id string, v any) error 
 	case <-ctx.Done():
 		return ctx.Err()
 	}
+}
+
+func (smr *SyncMapUserRepo) Delete(ctx context.Context, id string) error {
+	panic("unsupported behavior")
 }
 
 func (smr *SyncMapUserRepo) getFromDB(urlChan chan<- *valueTransfer, id string) {

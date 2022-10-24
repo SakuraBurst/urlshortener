@@ -17,6 +17,7 @@ type Repository interface {
 	CreateArray(context.Context, any) ([]string, error)
 	Read(context.Context, string) (any, error)
 	Update(context.Context, string, any) error
+	Delete(context.Context, string) error
 }
 
 type valueTransfer struct {

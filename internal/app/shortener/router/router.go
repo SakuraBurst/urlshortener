@@ -53,6 +53,7 @@ func InitAPI(controller *controllers.Controller, tb *token.TokenBuilder) *gin.En
 		userGroup := v1Api.Group("/user")
 		{
 			userGroup.GET("/urls", router.GetUserURLS)
+			userGroup.DELETE("/urls", router.DeleteArrayOfIds)
 		}
 	}
 	return engine
@@ -185,6 +186,15 @@ func (r *router) CreateArrayOfShortenerURLJson(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusCreated, resp)
+}
+
+func (r *router) DeleteArrayOfIds(c *gin.Context) {
+	var req []string
+	if err := c.BindJSON(&req); err != nil {
+		return
+	}
+	c.Status(http.StatusAccepted)
+	go r.controller.DeleteArrayOfIds(req, c.GetHeader("auth"))
 }
 
 func (r *router) PingDataBase(c *gin.Context) {

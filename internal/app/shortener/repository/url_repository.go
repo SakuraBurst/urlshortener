@@ -29,7 +29,7 @@ func initURLRepository(c context.Context, backUpPath string, db *pgx.Conn) (Repo
 			return nil, err
 		}
 		if !isExist {
-			_, err := db.Exec(c, "create table url (shortenHash text primary key, unShortenURL text)")
+			_, err := db.Exec(c, "create table url (shortenHash text primary key, unShortenURL text, isDeleted boolean)")
 			if err != nil {
 				return nil, err
 			}
@@ -149,6 +149,10 @@ func (d *DBURLRepo) Update(ctx context.Context, s string, v any) error {
 	return err
 }
 
+func (d *DBURLRepo) Delete(ctx context.Context, s string) error {
+	return nil
+}
+
 type SyncMapURLRepo struct {
 	sMap          sync.Map
 	m             sync.Mutex
@@ -218,6 +222,10 @@ func (smr *SyncMapURLRepo) Update(ctx context.Context, id string, v any) error {
 	case <-ctx.Done():
 		return ctx.Err()
 	}
+}
+
+func (smr *SyncMapURLRepo) Delete(ctx context.Context, id string) error {
+	panic("unsupported behavior")
 }
 
 func (smr *SyncMapURLRepo) getFromDB(valueChan chan<- *valueTransfer, id string) {

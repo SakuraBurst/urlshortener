@@ -153,12 +153,29 @@ func (c *Controller) GetUser(ctx context.Context, userToken string) ([]*types.UR
 			return nil, err
 		}
 		res = append(res, &types.URLShorter{
+			ID:          id,
 			ShortURL:    host.String(),
 			OriginalURL: r.String(),
 		})
-
 	}
 	return res, nil
+}
+
+func (c *Controller) DeleteArrayOfIds(ids []string, userToken string) {
+	userID, err := c.tokenBuilder.GetIDFromToken(userToken)
+	if err != nil {
+		return
+	}
+	v, err := c.userRep.Read(context.Background(), userID)
+	u, ok := v.([]string)
+	if u != nil && !ok {
+		return
+	}
+	for _, id := range ids {
+		if slices.Contains(u, id) {
+
+		}
+	}
 }
 
 func checkBaseURL(baseURL string) {
