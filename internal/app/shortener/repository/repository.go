@@ -11,13 +11,14 @@ import (
 var ErrNoSuchValue = errors.New("there is no such value in repo")
 var ErrUnexpectedTypeInMap = errors.New("unexpected type in map")
 var ErrDuplicate = errors.New("there is duplicate in data")
+var ErrDeleted = errors.New("url is deleted")
 
 type Repository interface {
 	Create(context.Context, any) (string, error)
 	CreateArray(context.Context, any) ([]string, error)
 	Read(context.Context, string) (any, error)
 	Update(context.Context, string, any) error
-	Delete(context.Context, string) error
+	Delete(context.Context, ...any) error
 }
 
 type valueTransfer struct {

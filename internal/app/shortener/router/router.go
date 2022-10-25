@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/SakuraBurst/urlshortener/internal/app/shortener/controllers"
+	"github.com/SakuraBurst/urlshortener/internal/app/shortener/repository"
 	"github.com/SakuraBurst/urlshortener/internal/app/shortener/token"
 	"github.com/gin-gonic/gin"
 	"io"
@@ -82,6 +83,10 @@ func (r *router) RedirectURL(c *gin.Context) {
 
 	unShortenURL, err := r.controller.GetURLFromID(c, id)
 	if err != nil {
+		if errors.Is(err, repository.ErrDeleted) {
+			c.Status(http.StatusGone)
+			return
+		}
 		c.AbortWithError(http.StatusNotFound, err)
 		return
 	}

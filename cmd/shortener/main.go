@@ -19,8 +19,8 @@ type config struct {
 	BaseURL         string `env:"BASE_URL" envDefault:"http://localhost:8080/"`
 	FileStoragePath string `env:"FILE_STORAGE_PATH"`
 	SecretSignKey   string `env:"SECRET_KEY" envDefault:"secret key"`
-	// envDefault:"postgres://postgres:password@localhost:5433/postgres"
-	DataBaseDsn string `env:"DATABASE_DSN"`
+	//
+	DataBaseDsn string `env:"DATABASE_DSN" envDefault:"postgres://postgres:password@localhost:5433/postgres"`
 }
 
 func main() {

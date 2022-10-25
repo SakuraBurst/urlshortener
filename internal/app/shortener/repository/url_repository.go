@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha1"
 	"encoding/json"
@@ -34,7 +35,7 @@ func initURLRepository(c context.Context, backUpPath string, db *pgx.Conn) (Repo
 				return nil, err
 			}
 		}
-		stmt, err := db.Prepare(c, "insert url", "INSERT INTO url (shortenhash, unshortenurl) VALUES ($1, $2) on conflict do nothing RETURNING shortenHash")
+		stmt, err := db.Prepare(c, "insert url", "INSERT INTO url (shortenhash, unshortenurl, isDeleted) VALUES ($1, $2, false) on conflict do nothing RETURNING shortenHash")
 		if err != nil {
 			return nil, err
 		}
@@ -131,11 +132,15 @@ func (d *DBURLRepo) CreateArray(ctx context.Context, v any) ([]string, error) {
 }
 
 func (d *DBURLRepo) Read(ctx context.Context, id string) (any, error) {
-	r := d.db.QueryRow(ctx, "SELECT unshortenurl from url where shortenhash = $1", id)
+	r := d.db.QueryRow(ctx, "SELECT unshortenurl, isDeleted from url where shortenhash = $1", id)
 	s := ""
-	err := r.Scan(&s)
+	isDeleted := false
+	err := r.Scan(&s, &isDeleted)
 	if err != nil {
 		return nil, err
+	}
+	if isDeleted {
+		return nil, ErrDeleted
 	}
 	return url.Parse(s)
 }
@@ -149,8 +154,18 @@ func (d *DBURLRepo) Update(ctx context.Context, s string, v any) error {
 	return err
 }
 
-func (d *DBURLRepo) Delete(ctx context.Context, s string) error {
-	return nil
+func (d *DBURLRepo) Delete(ctx context.Context, s ...any) error {
+	builder := bytes.NewBuffer(nil)
+	builder.WriteString("UPDATE url set isDeleted = true FROM (VALUES ")
+
+	for i := range s {
+		builder.WriteString(fmt.Sprintf("($%d),", i+1))
+	}
+	builder.Truncate(builder.Len() - 1)
+	builder.WriteString(") AS values (id) WHERE url.shortenhash = values.id")
+
+	_, err := d.db.Exec(ctx, builder.String(), s...)
+	return err
 }
 
 type SyncMapURLRepo struct {
@@ -224,7 +239,7 @@ func (smr *SyncMapURLRepo) Update(ctx context.Context, id string, v any) error {
 	}
 }
 
-func (smr *SyncMapURLRepo) Delete(ctx context.Context, id string) error {
+func (smr *SyncMapURLRepo) Delete(ctx context.Context, id ...any) error {
 	panic("unsupported behavior")
 }
 

@@ -164,17 +164,27 @@ func (c *Controller) GetUser(ctx context.Context, userToken string) ([]*types.UR
 func (c *Controller) DeleteArrayOfIds(ids []string, userToken string) {
 	userID, err := c.tokenBuilder.GetIDFromToken(userToken)
 	if err != nil {
+		log.Print(err)
 		return
 	}
 	v, err := c.userRep.Read(context.Background(), userID)
+	if err != nil {
+		log.Print(err)
+		return
+	}
 	u, ok := v.([]string)
 	if u != nil && !ok {
 		return
 	}
+	res := make([]any, 0, len(ids))
 	for _, id := range ids {
 		if slices.Contains(u, id) {
-
+			res = append(res, id)
 		}
+	}
+	err = c.urlRep.Delete(context.Background(), res...)
+	if err != nil {
+		log.Print(err)
 	}
 }
 
