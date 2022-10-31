@@ -169,7 +169,7 @@ func (c *Controller) DeleteArrayOfIds(ids []string, userToken string) {
 	}
 	v, err := c.userRep.Read(context.Background(), userID)
 	if err != nil {
-		log.Print(err)
+		log.Print(err, " user id ", userID)
 		return
 	}
 	u, ok := v.([]string)

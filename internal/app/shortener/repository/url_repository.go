@@ -177,6 +177,7 @@ func (d *DBURLRepo) batchUpdate(ctx context.Context, ids []string, sqlString str
 		for _, id := range ids {
 			mc <- id
 		}
+		close(mc)
 	}()
 	return d.batchWorker(ctx, resC)
 }
