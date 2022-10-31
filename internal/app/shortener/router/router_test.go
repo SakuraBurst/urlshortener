@@ -49,6 +49,10 @@ func (r *mockDataBase) Update(ctx context.Context, id string, val any) error {
 	return args.Error(0)
 }
 
+func (r *mockDataBase) Delete(ctx context.Context, val ...string) error {
+	panic("not implemented")
+}
+
 var MockURLRaw = "https://test.com/"
 
 var hashURL = "1"

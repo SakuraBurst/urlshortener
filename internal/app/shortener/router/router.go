@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/SakuraBurst/urlshortener/internal/app/shortener/controllers"
+	"github.com/SakuraBurst/urlshortener/internal/app/shortener/repository"
 	"github.com/SakuraBurst/urlshortener/internal/app/shortener/token"
 	"github.com/gin-gonic/gin"
 	"io"
@@ -53,6 +54,7 @@ func InitAPI(controller *controllers.Controller, tb *token.TokenBuilder) *gin.En
 		userGroup := v1Api.Group("/user")
 		{
 			userGroup.GET("/urls", router.GetUserURLS)
+			userGroup.DELETE("/urls", router.DeleteArrayOfIds)
 		}
 	}
 	return engine
@@ -81,6 +83,10 @@ func (r *router) RedirectURL(c *gin.Context) {
 
 	unShortenURL, err := r.controller.GetURLFromID(c, id)
 	if err != nil {
+		if errors.Is(err, repository.ErrDeleted) {
+			c.Status(http.StatusGone)
+			return
+		}
 		c.AbortWithError(http.StatusNotFound, err)
 		return
 	}
@@ -185,6 +191,15 @@ func (r *router) CreateArrayOfShortenerURLJson(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusCreated, resp)
+}
+
+func (r *router) DeleteArrayOfIds(c *gin.Context) {
+	var req []string
+	if err := c.BindJSON(&req); err != nil {
+		return
+	}
+	c.Status(http.StatusAccepted)
+	go r.controller.DeleteArrayOfIds(req, c.GetHeader("auth"))
 }
 
 func (r *router) PingDataBase(c *gin.Context) {

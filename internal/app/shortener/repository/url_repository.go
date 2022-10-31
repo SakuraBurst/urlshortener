@@ -29,12 +29,12 @@ func initURLRepository(c context.Context, backUpPath string, db *pgx.Conn) (Repo
 			return nil, err
 		}
 		if !isExist {
-			_, err := db.Exec(c, "create table url (shortenHash text primary key, unShortenURL text)")
+			_, err := db.Exec(c, "create table url (shortenHash text primary key, unShortenURL text, isDeleted boolean)")
 			if err != nil {
 				return nil, err
 			}
 		}
-		stmt, err := db.Prepare(c, "insert url", "INSERT INTO url (shortenhash, unshortenurl) VALUES ($1, $2) on conflict do nothing RETURNING shortenHash")
+		stmt, err := db.Prepare(c, "insert url", "INSERT INTO url (shortenhash, unshortenurl, isDeleted) VALUES ($1, $2, false) on conflict do nothing RETURNING shortenHash")
 		if err != nil {
 			return nil, err
 		}
@@ -131,11 +131,15 @@ func (d *DBURLRepo) CreateArray(ctx context.Context, v any) ([]string, error) {
 }
 
 func (d *DBURLRepo) Read(ctx context.Context, id string) (any, error) {
-	r := d.db.QueryRow(ctx, "SELECT unshortenurl from url where shortenhash = $1", id)
+	r := d.db.QueryRow(ctx, "SELECT unshortenurl, isDeleted from url where shortenhash = $1", id)
 	s := ""
-	err := r.Scan(&s)
+	isDeleted := false
+	err := r.Scan(&s, &isDeleted)
 	if err != nil {
 		return nil, err
+	}
+	if isDeleted {
+		return nil, ErrDeleted
 	}
 	return url.Parse(s)
 }
@@ -147,6 +151,118 @@ func (d *DBURLRepo) Update(ctx context.Context, s string, v any) error {
 	}
 	_, err := d.db.Exec(ctx, "UPDATE url set unshortenurl = $1 where shortenhash = $2", u.String(), s)
 	return err
+}
+
+func (d *DBURLRepo) Delete(ctx context.Context, s ...string) error {
+	return d.batchUpdate(ctx, s, "UPDATE url set isDeleted = true WHERE shortenhash = $1")
+}
+
+type sql struct {
+	sql       string
+	arguments []interface{}
+}
+
+func (d *DBURLRepo) batchUpdate(ctx context.Context, ids []string, sqlString string) error {
+	mc := make(chan string)
+	numberOfWorkers := len(ids) % 20
+	in := fanIn(mc, numberOfWorkers)
+	out := make([]chan *sql, 0, numberOfWorkers)
+	for i := 0; i < numberOfWorkers; i++ {
+		c := make(chan *sql)
+		out = append(out, c)
+		builder(sqlString, in[i], c)
+	}
+	resC := fanOut(out...)
+	go func() {
+		for _, id := range ids {
+			mc <- id
+		}
+		close(mc)
+	}()
+	return d.batchWorker(ctx, resC)
+}
+
+func fanIn(inputChan <-chan string, n int) []chan string {
+	a := make([]chan string, 0, n)
+	for i := 0; i < n; i++ {
+		a = append(a, make(chan string))
+	}
+	go func() {
+		defer func() {
+			for _, c := range a {
+				close(c)
+			}
+		}()
+		for i := 0; ; i++ {
+			if i == n {
+				i = 0
+			}
+			v, ok := <-inputChan
+			if !ok {
+				return
+			}
+			a[i] <- v
+		}
+	}()
+	return a
+}
+
+func builder(sqlString string, in <-chan string, out chan<- *sql) {
+	go func() {
+		for id := range in {
+			out <- &sql{
+				sql:       sqlString,
+				arguments: []interface{}{id},
+			}
+		}
+		close(out)
+	}()
+}
+
+func fanOut(in ...chan *sql) chan *sql {
+	output := make(chan *sql)
+	go func() {
+		wg := sync.WaitGroup{}
+		for _, sqls := range in {
+			wg.Add(1)
+			go func(sqls chan *sql) {
+				defer wg.Done()
+				for s := range sqls {
+					output <- s
+				}
+			}(sqls)
+		}
+		wg.Wait()
+		close(output)
+	}()
+
+	return output
+}
+
+func (d *DBURLRepo) batchWorker(ctx context.Context, in chan *sql) error {
+	batch := &pgx.Batch{}
+
+	for {
+		if batch.Len() > 2 {
+			br := d.db.SendBatch(ctx, batch)
+			if err := br.Close(); err != nil {
+				return err
+			}
+			batch = &pgx.Batch{}
+		}
+		stmt, ok := <-in
+		if !ok {
+			break
+		}
+		batch.Queue(stmt.sql, stmt.arguments...)
+	}
+	if batch.Len() > 0 {
+		br := d.db.SendBatch(ctx, batch)
+		if err := br.Close(); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 type SyncMapURLRepo struct {
@@ -218,6 +334,10 @@ func (smr *SyncMapURLRepo) Update(ctx context.Context, id string, v any) error {
 	case <-ctx.Done():
 		return ctx.Err()
 	}
+}
+
+func (smr *SyncMapURLRepo) Delete(ctx context.Context, id ...string) error {
+	panic("unsupported behavior")
 }
 
 func (smr *SyncMapURLRepo) getFromDB(valueChan chan<- *valueTransfer, id string) {
