@@ -251,10 +251,17 @@ func (d *DBURLRepo) batchWorker(ctx context.Context, in chan *sql) error {
 		}
 		stmt, ok := <-in
 		if !ok {
-			return nil
+			break
 		}
 		batch.Queue(stmt.sql, stmt.arguments...)
 	}
+	if batch.Len() > 0 {
+		br := d.db.SendBatch(ctx, batch)
+		if err := br.Close(); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 type SyncMapURLRepo struct {
