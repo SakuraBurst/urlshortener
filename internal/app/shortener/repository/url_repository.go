@@ -1,7 +1,6 @@
 package repository
 
 import (
-	"bytes"
 	"context"
 	"crypto/sha1"
 	"encoding/json"
@@ -154,18 +153,108 @@ func (d *DBURLRepo) Update(ctx context.Context, s string, v any) error {
 	return err
 }
 
-func (d *DBURLRepo) Delete(ctx context.Context, s ...any) error {
-	builder := bytes.NewBuffer(nil)
-	builder.WriteString("UPDATE url set isDeleted = true FROM (VALUES ")
+func (d *DBURLRepo) Delete(ctx context.Context, s ...string) error {
+	return d.batchUpdate(ctx, s, "UPDATE url set isDeleted = true WHERE shortenhash = $1")
+}
 
-	for i := range s {
-		builder.WriteString(fmt.Sprintf("($%d),", i+1))
+type sql struct {
+	sql       string
+	arguments []interface{}
+}
+
+func (d *DBURLRepo) batchUpdate(ctx context.Context, ids []string, sqlString string) error {
+	mc := make(chan string)
+	numberOfWorkers := len(ids) % 20
+	in := fanIn(mc, numberOfWorkers)
+	out := make([]chan *sql, 0, numberOfWorkers)
+	for i := 0; i < numberOfWorkers; i++ {
+		c := make(chan *sql)
+		out = append(out, c)
+		builder(sqlString, in[i], c)
 	}
-	builder.Truncate(builder.Len() - 1)
-	builder.WriteString(") AS values (id) WHERE url.shortenhash = values.id")
+	resC := fanOut(out...)
+	go func() {
+		for _, id := range ids {
+			mc <- id
+		}
+	}()
+	return d.batchWorker(ctx, resC)
+}
 
-	_, err := d.db.Exec(ctx, builder.String(), s...)
-	return err
+func fanIn(inputChan <-chan string, n int) []chan string {
+	a := make([]chan string, 0, n)
+	for i := 0; i < n; i++ {
+		a = append(a, make(chan string))
+	}
+	go func() {
+		defer func() {
+			for _, c := range a {
+				close(c)
+			}
+		}()
+		for i := 0; ; i++ {
+			if i == n {
+				i = 0
+			}
+			v, ok := <-inputChan
+			if !ok {
+				return
+			}
+			a[i] <- v
+		}
+	}()
+	return a
+}
+
+func builder(sqlString string, in <-chan string, out chan<- *sql) {
+	go func() {
+		for id := range in {
+			out <- &sql{
+				sql:       sqlString,
+				arguments: []interface{}{id},
+			}
+		}
+		close(out)
+	}()
+}
+
+func fanOut(in ...chan *sql) chan *sql {
+	output := make(chan *sql)
+	go func() {
+		wg := sync.WaitGroup{}
+		for _, sqls := range in {
+			wg.Add(1)
+			go func(sqls chan *sql) {
+				defer wg.Done()
+				for s := range sqls {
+					output <- s
+				}
+			}(sqls)
+		}
+		wg.Wait()
+		close(output)
+	}()
+
+	return output
+}
+
+func (d *DBURLRepo) batchWorker(ctx context.Context, in chan *sql) error {
+	batch := &pgx.Batch{}
+
+	for {
+		if batch.Len() > 2 {
+			br := d.db.SendBatch(ctx, batch)
+			if err := br.Close(); err != nil {
+				return err
+			}
+			batch = &pgx.Batch{}
+		}
+		stmt, ok := <-in
+		if !ok {
+			return nil
+		}
+		batch.Queue(stmt.sql, stmt.arguments...)
+	}
 }
 
 type SyncMapURLRepo struct {
@@ -239,7 +328,7 @@ func (smr *SyncMapURLRepo) Update(ctx context.Context, id string, v any) error {
 	}
 }
 
-func (smr *SyncMapURLRepo) Delete(ctx context.Context, id ...any) error {
+func (smr *SyncMapURLRepo) Delete(ctx context.Context, id ...string) error {
 	panic("unsupported behavior")
 }
 

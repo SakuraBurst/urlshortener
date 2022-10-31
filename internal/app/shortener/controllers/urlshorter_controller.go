@@ -176,7 +176,7 @@ func (c *Controller) DeleteArrayOfIds(ids []string, userToken string) {
 	if u != nil && !ok {
 		return
 	}
-	res := make([]any, 0, len(ids))
+	res := make([]string, 0, len(ids))
 	for _, id := range ids {
 		if slices.Contains(u, id) {
 			res = append(res, id)
